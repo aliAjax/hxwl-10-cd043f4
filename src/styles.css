@@ -629,6 +629,42 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.stratum-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.stratum-chips-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.stratum-chip {
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  background: #ffffff;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.stratum-chip:hover {
+  background: color-mix(in srgb, var(--primary) 10%, #ffffff);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
 .conflict-alert {
   display: flex;
   align-items: flex-start;

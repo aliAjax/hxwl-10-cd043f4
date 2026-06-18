@@ -387,11 +387,27 @@ function App() {
     return relationTypeOptions.find(o => o.value === type)?.inverse || type;
   };
 
+  const availableStrata = (): string[] => {
+    const strataSet = new Set<string>();
+    stratumRelations.forEach(r => {
+      if (r.stratumA) strataSet.add(r.stratumA);
+      if (r.stratumB) strataSet.add(r.stratumB);
+    });
+    artifactRecords.forEach(r => {
+      if (r.stratum) strataSet.add(r.stratum);
+    });
+    project.records.forEach(record => {
+      if (record[1]) strataSet.add(record[1]);
+    });
+    return Array.from(strataSet).sort();
+  };
+
+  const strataOptions = availableStrata();
+
   const checkDuplicateRelation = (a: string, b: string, type: RelationType, excludeId?: number): boolean => {
     return stratumRelations.some(r => {
       if (excludeId && r.id === excludeId) return false;
       const sameDirection = r.stratumA === a && r.stratumB === b && r.relationType === type;
-      const oppositeDirection = r.stratumA === b && r.stratumB === a && r.relationType === type;
       return sameDirection;
     });
   };
@@ -406,11 +422,27 @@ function App() {
           };
         }
       }
-      if (type === "earlier" && r.relationType === "earlier") {
+      if (type === "contains" && r.relationType === "contains") {
         if (r.stratumA === b && r.stratumB === a) {
           return {
             hasConflict: true,
-            message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`
+            message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`
+          };
+        }
+      }
+      if (type === "breaks" && r.relationType === "earlier") {
+        if (r.stratumA === a && r.stratumB === b) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${a} 早于 ${b}"，不能同时存在 "${a} 打破 ${b}"（打破意味着年代更晚）`
+          };
+        }
+      }
+      if (type === "earlier" && r.relationType === "breaks") {
+        if (r.stratumA === a && r.stratumB === b) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${a} 打破 ${b}"，不能同时存在 "${a} 早于 ${b}"（打破意味着年代更晚）`
           };
         }
       }
@@ -422,11 +454,11 @@ function App() {
           };
         }
       }
-      if (type === "contains" && r.relationType === "contains") {
+      if (type === "earlier" && r.relationType === "earlier") {
         if (r.stratumA === b && r.stratumB === a) {
           return {
             hasConflict: true,
-            message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`
+            message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`
           };
         }
       }
@@ -959,11 +991,17 @@ function App() {
           <label>
             <span>地层A <span className="required">*</span></span>
             <input
-              placeholder="如 第2层"
+              list="stratum-options-a"
+              placeholder="选择或输入地层名称"
               value={relationFormData.stratumA}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleRelationInputChange("stratumA", e.target.value)}
               className={relationFormErrors.stratumA ? "input-error" : ""}
             />
+            <datalist id="stratum-options-a">
+              {strataOptions.map(s => (
+                <option key={`a-${s}`} value={s} />
+              ))}
+            </datalist>
             {relationFormErrors.stratumA && <span className="error-text">{relationFormErrors.stratumA}</span>}
           </label>
           <label>
@@ -983,14 +1021,45 @@ function App() {
           <label>
             <span>地层B <span className="required">*</span></span>
             <input
-              placeholder="如 第3层"
+              list="stratum-options-b"
+              placeholder="选择或输入地层名称"
               value={relationFormData.stratumB}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleRelationInputChange("stratumB", e.target.value)}
               className={relationFormErrors.stratumB ? "input-error" : ""}
             />
+            <datalist id="stratum-options-b">
+              {strataOptions.map(s => (
+                <option key={`b-${s}`} value={s} />
+              ))}
+            </datalist>
             {relationFormErrors.stratumB && <span className="error-text">{relationFormErrors.stratumB}</span>}
           </label>
         </div>
+        {strataOptions.length > 0 && (
+          <div className="stratum-chips">
+            <span className="stratum-chips-label">已有地层：</span>
+            {strataOptions.map(s => (
+              <button
+                key={s}
+                type="button"
+                className="stratum-chip"
+                onClick={() => {
+                  if (!relationFormData.stratumA) {
+                    handleRelationInputChange("stratumA", s);
+                  } else if (!relationFormData.stratumB && relationFormData.stratumA !== s) {
+                    handleRelationInputChange("stratumB", s);
+                  } else if (relationFormData.stratumA && !relationFormData.stratumB && relationFormData.stratumA === s) {
+                  } else {
+                    handleRelationInputChange("stratumA", s);
+                  }
+                }}
+                title="点击快速选择地层"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         {relationFormErrors.conflict && (
           <div className="conflict-alert">
             <span className="conflict-icon">⚠</span>
