@@ -23,6 +23,26 @@ interface ArtifactFormData {
   remarks: string;
 }
 
+interface ExcavationLog {
+  id: number;
+  date: string;
+  weather: string;
+  participants: string;
+  excavationArea: string;
+  mainFindings: string;
+  pendingReview: string;
+  createdAt: string;
+}
+
+interface ExcavationLogFormData {
+  date: string;
+  weather: string;
+  participants: string;
+  excavationArea: string;
+  mainFindings: string;
+  pendingReview: string;
+}
+
 interface SearchFilters {
   trenchNumber: string;
   stratum: string;
@@ -31,6 +51,7 @@ interface SearchFilters {
 }
 
 type FormErrors = Partial<Record<keyof ArtifactFormData, string>>;
+type ExcavationLogFormErrors = Partial<Record<keyof ExcavationLogFormData, string>>;
 
 const project = {
   "id": "hxwl-10",
@@ -97,6 +118,41 @@ const statusColors = ["status-ok", "status-watch", "status-danger"];
 
 const artifactTypes = ["陶片", "石器", "骨器", "青铜器", "瓷器", "铁器", "动植物遗存", "其他"];
 
+const weatherOptions = ["晴", "多云", "阴", "小雨", "中雨", "大雨", "小雪", "中雪", "雾", "霾"];
+
+const initialExcavationLogs: ExcavationLog[] = [
+  {
+    id: 1,
+    date: "2024-06-17",
+    weather: "晴",
+    participants: "张建国、李明、王小芳",
+    excavationArea: "T0203、T0204",
+    mainFindings: "T0203 第3层出土陶片12件，其中可辨器形有鬲口沿2件、罐腹片5件；T0204 H12灰坑内发现动物骨骼碎片及炭屑堆积",
+    pendingReview: "T0203 第2层与第3层的地层界线需进一步确认；H12灰坑出土的动物骨骼需送鉴定",
+    createdAt: "2024/6/17 18:30:00"
+  },
+  {
+    id: 2,
+    date: "2024-06-16",
+    weather: "多云",
+    participants: "张建国、李明、赵伟",
+    excavationArea: "T0301",
+    mainFindings: "T0301 F2房址清理出柱洞6个，排列规律疑似为长方形建筑基址；房址内出土少量绳纹陶片",
+    pendingReview: "F2房址柱洞的年代关系需结合出土物进一步分析；夯土面的土质土色需详细记录",
+    createdAt: "2024/6/16 17:45:00"
+  },
+  {
+    id: 3,
+    date: "2024-06-15",
+    weather: "小雨",
+    participants: "李明、王小芳",
+    excavationArea: "T0204",
+    mainFindings: "因小雨停工半天，下午对 T0204 第4层进行了剖面清理，确认该层为文化层堆积",
+    pendingReview: "雨天后探方排水情况需持续关注；T0204 第4层陶片需分类统计",
+    createdAt: "2024/6/15 16:20:00"
+  }
+];
+
 function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
   return (
     <article className="metric-card">
@@ -125,6 +181,16 @@ function App() {
     relicUnit: "",
     artifactKeyword: ""
   });
+  const [excavationLogs, setExcavationLogs] = useState<ExcavationLog[]>(initialExcavationLogs);
+  const [logFormData, setLogFormData] = useState<ExcavationLogFormData>({
+    date: new Date().toISOString().split("T")[0],
+    weather: "",
+    participants: "",
+    excavationArea: "",
+    mainFindings: "",
+    pendingReview: ""
+  });
+  const [logFormErrors, setLogFormErrors] = useState<ExcavationLogFormErrors>({});
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -206,6 +272,63 @@ function App() {
       relicUnit: "",
       artifactKeyword: ""
     });
+  };
+
+  const validateLogForm = (): boolean => {
+    const errors: ExcavationLogFormErrors = {};
+    if (!logFormData.date.trim()) {
+      errors.date = "请选择日期";
+    }
+    if (!logFormData.weather.trim()) {
+      errors.weather = "请选择天气";
+    }
+    if (!logFormData.participants.trim()) {
+      errors.participants = "请输入参与人员";
+    }
+    if (!logFormData.excavationArea.trim()) {
+      errors.excavationArea = "请输入发掘区域";
+    }
+    if (!logFormData.mainFindings.trim()) {
+      errors.mainFindings = "请输入主要发现";
+    }
+    setLogFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleLogInputChange = (field: keyof ExcavationLogFormData, value: string) => {
+    setLogFormData(prev => ({ ...prev, [field]: value }));
+    if (logFormErrors[field]) {
+      setLogFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleLogSubmit = () => {
+    if (!validateLogForm()) {
+      return;
+    }
+    const newLog: ExcavationLog = {
+      id: Date.now(),
+      ...logFormData,
+      createdAt: new Date().toLocaleString("zh-CN")
+    };
+    setExcavationLogs(prev => [newLog, ...prev]);
+    handleLogClear();
+  };
+
+  const handleLogClear = () => {
+    setLogFormData({
+      date: new Date().toISOString().split("T")[0],
+      weather: "",
+      participants: "",
+      excavationArea: "",
+      mainFindings: "",
+      pendingReview: ""
+    });
+    setLogFormErrors({});
   };
 
   const filterProjectRecords = (records: string[][]): string[][] => {
@@ -506,6 +629,131 @@ function App() {
             )}
           </div>
         </section>
+      </section>
+
+      <section className="panel excavation-log-section">
+        <div className="section-heading">
+          <div>
+            <p>日志记录</p>
+            <h2>发掘日志</h2>
+          </div>
+          <div className="form-actions">
+            <button onClick={handleLogClear}>清空表单</button>
+            <button className="primary-action" onClick={handleLogSubmit}>新增日志</button>
+          </div>
+        </div>
+        <div className="field-grid">
+          <label>
+            <span>日期 <span className="required">*</span></span>
+            <input
+              type="date"
+              value={logFormData.date}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLogInputChange("date", e.target.value)}
+              className={logFormErrors.date ? "input-error" : ""}
+            />
+            {logFormErrors.date && <span className="error-text">{logFormErrors.date}</span>}
+          </label>
+          <label>
+            <span>天气 <span className="required">*</span></span>
+            <select
+              value={logFormData.weather}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleLogInputChange("weather", e.target.value)}
+              className={logFormErrors.weather ? "input-error" : ""}
+            >
+              <option value="">请选择天气</option>
+              {weatherOptions.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
+            {logFormErrors.weather && <span className="error-text">{logFormErrors.weather}</span>}
+          </label>
+          <label>
+            <span>参与人员 <span className="required">*</span></span>
+            <input
+              placeholder="如 张三、李四、王五"
+              value={logFormData.participants}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLogInputChange("participants", e.target.value)}
+              className={logFormErrors.participants ? "input-error" : ""}
+            />
+            {logFormErrors.participants && <span className="error-text">{logFormErrors.participants}</span>}
+          </label>
+          <label>
+            <span>发掘区域 <span className="required">*</span></span>
+            <input
+              placeholder="如 T0203、T0204"
+              value={logFormData.excavationArea}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLogInputChange("excavationArea", e.target.value)}
+              className={logFormErrors.excavationArea ? "input-error" : ""}
+            />
+            {logFormErrors.excavationArea && <span className="error-text">{logFormErrors.excavationArea}</span>}
+          </label>
+          <label className="full-width">
+            <span>主要发现 <span className="required">*</span></span>
+            <textarea
+              placeholder="详细描述当日的主要发掘发现"
+              value={logFormData.mainFindings}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleLogInputChange("mainFindings", e.target.value)}
+              className={logFormErrors.mainFindings ? "input-error" : ""}
+              rows={3}
+            />
+            {logFormErrors.mainFindings && <span className="error-text">{logFormErrors.mainFindings}</span>}
+          </label>
+          <label className="full-width">
+            <span>待复核事项</span>
+            <textarea
+              placeholder="需要后续跟进或复核的事项（选填）"
+              value={logFormData.pendingReview}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleLogInputChange("pendingReview", e.target.value)}
+              rows={2}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel excavation-timeline-section">
+        <div className="section-heading">
+          <div>
+            <p>时间线</p>
+            <h2>日志时间线</h2>
+          </div>
+          <div>共 {excavationLogs.length} 条</div>
+        </div>
+        <div className="timeline">
+          {excavationLogs.length === 0 ? (
+            <p className="empty-state">暂无发掘日志，请在上方表单录入</p>
+          ) : (
+            excavationLogs.map((log) => (
+              <div key={log.id} className="timeline-item">
+                <div className="timeline-dot"></div>
+                <div className="timeline-content">
+                  <div className="timeline-header">
+                    <div className="timeline-date">
+                      <strong>{log.date}</strong>
+                      <span className="weather-tag">{log.weather}</span>
+                    </div>
+                    <span className="timeline-area">{log.excavationArea}</span>
+                  </div>
+                  <div className="timeline-meta">
+                    <span className="timeline-participants">👤 {log.participants}</span>
+                  </div>
+                  <div className="timeline-body">
+                    <div className="timeline-findings">
+                      <h4>主要发现</h4>
+                      <p>{log.mainFindings}</p>
+                    </div>
+                    {log.pendingReview && (
+                      <div className="timeline-pending">
+                        <h4>待复核事项</h4>
+                        <p>{log.pendingReview}</p>
+                      </div>
+                    )}
+                  </div>
+                  <p className="record-time">{log.createdAt}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </section>
     </main>
   );
