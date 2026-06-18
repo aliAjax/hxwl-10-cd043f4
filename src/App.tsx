@@ -53,6 +53,47 @@ interface SearchFilters {
 type FormErrors = Partial<Record<keyof ArtifactFormData, string>>;
 type ExcavationLogFormErrors = Partial<Record<keyof ExcavationLogFormData, string>>;
 
+type RelationType = "earlier" | "breaks" | "contains";
+
+interface StratumRelation {
+  id: number;
+  stratumA: string;
+  stratumB: string;
+  relationType: RelationType;
+  createdAt: string;
+}
+
+interface StratumRelationFormData {
+  stratumA: string;
+  stratumB: string;
+  relationType: RelationType | "";
+}
+
+type StratumRelationFormErrors = Partial<Record<keyof StratumRelationFormData | "conflict", string>>;
+
+const relationTypeOptions: { value: RelationType; label: string; description: string; inverse: string }[] = [
+  { value: "earlier", label: "早于", description: "A 的年代早于 B", inverse: "晚于" },
+  { value: "breaks", label: "打破", description: "A 地层打破了 B 地层", inverse: "被打破" },
+  { value: "contains", label: "包含", description: "A 地层包含 B 遗迹/地层", inverse: "被包含于" }
+];
+
+const initialStratumRelations: StratumRelation[] = [
+  {
+    id: 1,
+    stratumA: "第2层",
+    stratumB: "第3层",
+    relationType: "earlier",
+    createdAt: "2024/6/17 10:15:00"
+  },
+  {
+    id: 2,
+    stratumA: "H12灰坑",
+    stratumB: "第3层",
+    relationType: "breaks",
+    createdAt: "2024/6/17 11:30:00"
+  }
+];
+
 const project = {
   "id": "hxwl-10",
   "port": 5110,
@@ -191,6 +232,13 @@ function App() {
     pendingReview: ""
   });
   const [logFormErrors, setLogFormErrors] = useState<ExcavationLogFormErrors>({});
+  const [stratumRelations, setStratumRelations] = useState<StratumRelation[]>(initialStratumRelations);
+  const [relationFormData, setRelationFormData] = useState<StratumRelationFormData>({
+    stratumA: "",
+    stratumB: "",
+    relationType: ""
+  });
+  const [relationFormErrors, setRelationFormErrors] = useState<StratumRelationFormErrors>({});
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -329,6 +377,138 @@ function App() {
       pendingReview: ""
     });
     setLogFormErrors({});
+  };
+
+  const getRelationLabel = (type: RelationType): string => {
+    return relationTypeOptions.find(o => o.value === type)?.label || type;
+  };
+
+  const getRelationInverseLabel = (type: RelationType): string => {
+    return relationTypeOptions.find(o => o.value === type)?.inverse || type;
+  };
+
+  const checkDuplicateRelation = (a: string, b: string, type: RelationType, excludeId?: number): boolean => {
+    return stratumRelations.some(r => {
+      if (excludeId && r.id === excludeId) return false;
+      const sameDirection = r.stratumA === a && r.stratumB === b && r.relationType === type;
+      const oppositeDirection = r.stratumA === b && r.stratumB === a && r.relationType === type;
+      return sameDirection;
+    });
+  };
+
+  const checkConflictRelation = (a: string, b: string, type: RelationType): { hasConflict: boolean; message: string } => {
+    for (const r of stratumRelations) {
+      if (r.relationType === type) {
+        if (r.stratumA === b && r.stratumB === a) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${b} ${getRelationLabel(type)} ${a}"，不能同时存在 "${a} ${getRelationLabel(type)} ${b}"`
+          };
+        }
+      }
+      if (type === "earlier" && r.relationType === "earlier") {
+        if (r.stratumA === b && r.stratumB === a) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`
+          };
+        }
+      }
+      if (type === "breaks" && r.relationType === "breaks") {
+        if (r.stratumA === b && r.stratumB === a) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${b} 打破 ${a}"，不能同时存在 "${a} 打破 ${b}"`
+          };
+        }
+      }
+      if (type === "contains" && r.relationType === "contains") {
+        if (r.stratumA === b && r.stratumB === a) {
+          return {
+            hasConflict: true,
+            message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`
+          };
+        }
+      }
+    }
+    return { hasConflict: false, message: "" };
+  };
+
+  const validateRelationForm = (): boolean => {
+    const errors: StratumRelationFormErrors = {};
+    if (!relationFormData.stratumA.trim()) {
+      errors.stratumA = "请输入地层A名称";
+    }
+    if (!relationFormData.stratumB.trim()) {
+      errors.stratumB = "请输入地层B名称";
+    }
+    if (relationFormData.stratumA.trim() && relationFormData.stratumB.trim() && relationFormData.stratumA.trim() === relationFormData.stratumB.trim()) {
+      errors.stratumB = "地层A和地层B不能相同";
+    }
+    if (!relationFormData.relationType) {
+      errors.relationType = "请选择关系类型";
+    }
+    if (relationFormData.stratumA.trim() && relationFormData.stratumB.trim() && relationFormData.relationType) {
+      const isDuplicate = checkDuplicateRelation(
+        relationFormData.stratumA.trim(),
+        relationFormData.stratumB.trim(),
+        relationFormData.relationType as RelationType
+      );
+      if (isDuplicate) {
+        errors.conflict = `重复：关系 "${relationFormData.stratumA.trim()} ${getRelationLabel(relationFormData.relationType as RelationType)} ${relationFormData.stratumB.trim()}" 已存在`;
+      } else {
+        const conflict = checkConflictRelation(
+          relationFormData.stratumA.trim(),
+          relationFormData.stratumB.trim(),
+          relationFormData.relationType as RelationType
+        );
+        if (conflict.hasConflict) {
+          errors.conflict = conflict.message;
+        }
+      }
+    }
+    setRelationFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleRelationInputChange = (field: keyof StratumRelationFormData, value: string) => {
+    setRelationFormData(prev => ({ ...prev, [field]: value }));
+    if (relationFormErrors[field] || relationFormErrors.conflict) {
+      setRelationFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        delete newErrors.conflict;
+        return newErrors;
+      });
+    }
+  };
+
+  const handleRelationSubmit = () => {
+    if (!validateRelationForm()) {
+      return;
+    }
+    const newRelation: StratumRelation = {
+      id: Date.now(),
+      stratumA: relationFormData.stratumA.trim(),
+      stratumB: relationFormData.stratumB.trim(),
+      relationType: relationFormData.relationType as RelationType,
+      createdAt: new Date().toLocaleString("zh-CN")
+    };
+    setStratumRelations(prev => [newRelation, ...prev]);
+    handleRelationClear();
+  };
+
+  const handleRelationClear = () => {
+    setRelationFormData({
+      stratumA: "",
+      stratumB: "",
+      relationType: ""
+    });
+    setRelationFormErrors({});
+  };
+
+  const handleDeleteRelation = (id: number) => {
+    setStratumRelations(prev => prev.filter(r => r.id !== id));
   };
 
   const filterProjectRecords = (records: string[][]): string[][] => {
@@ -751,6 +931,104 @@ function App() {
                   <p className="record-time">{log.createdAt}</p>
                 </div>
               </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="panel stratum-relation-section">
+        <div className="section-heading">
+          <div>
+            <p>地层关系</p>
+            <h2>地层关系矩阵</h2>
+          </div>
+          <div className="form-actions">
+            <button onClick={handleRelationClear}>清空表单</button>
+            <button className="primary-action" onClick={handleRelationSubmit}>新增关系</button>
+          </div>
+        </div>
+        <div className="relation-type-hints">
+          {relationTypeOptions.map(opt => (
+            <div key={opt.value} className={`relation-hint relation-${opt.value}`}>
+              <span className="relation-hint-label">{opt.label}</span>
+              <span className="relation-hint-desc">{opt.description}</span>
+            </div>
+          ))}
+        </div>
+        <div className="field-grid relation-form-grid">
+          <label>
+            <span>地层A <span className="required">*</span></span>
+            <input
+              placeholder="如 第2层"
+              value={relationFormData.stratumA}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleRelationInputChange("stratumA", e.target.value)}
+              className={relationFormErrors.stratumA ? "input-error" : ""}
+            />
+            {relationFormErrors.stratumA && <span className="error-text">{relationFormErrors.stratumA}</span>}
+          </label>
+          <label>
+            <span>关系类型 <span className="required">*</span></span>
+            <select
+              value={relationFormData.relationType}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRelationInputChange("relationType", e.target.value)}
+              className={relationFormErrors.relationType ? "input-error" : ""}
+            >
+              <option value="">请选择关系类型</option>
+              {relationTypeOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}（A {opt.label} B）</option>
+              ))}
+            </select>
+            {relationFormErrors.relationType && <span className="error-text">{relationFormErrors.relationType}</span>}
+          </label>
+          <label>
+            <span>地层B <span className="required">*</span></span>
+            <input
+              placeholder="如 第3层"
+              value={relationFormData.stratumB}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleRelationInputChange("stratumB", e.target.value)}
+              className={relationFormErrors.stratumB ? "input-error" : ""}
+            />
+            {relationFormErrors.stratumB && <span className="error-text">{relationFormErrors.stratumB}</span>}
+          </label>
+        </div>
+        {relationFormErrors.conflict && (
+          <div className="conflict-alert">
+            <span className="conflict-icon">⚠</span>
+            <span>{relationFormErrors.conflict}</span>
+          </div>
+        )}
+        <div className="relation-list-header">
+          <h3>关系列表</h3>
+          <span className="relation-count">共 {stratumRelations.length} 条记录</span>
+        </div>
+        <div className="relation-list">
+          {stratumRelations.length === 0 ? (
+            <p className="empty-state">暂无地层关系记录，请在上方表单录入</p>
+          ) : (
+            stratumRelations.map((relation, index) => (
+              <article key={relation.id} className="relation-card">
+                <div className={`relation-index relation-index-${relation.relationType}`}>
+                  {String(index + 1).padStart(2, "0")}
+                </div>
+                <div className="relation-content">
+                  <div className="relation-statement">
+                    <span className="stratum-tag">{relation.stratumA}</span>
+                    <span className={`relation-arrow relation-${relation.relationType}`}>
+                      {getRelationLabel(relation.relationType)}
+                    </span>
+                    <span className="stratum-tag">{relation.stratumB}</span>
+                  </div>
+                  <div className="relation-inverse">
+                    反向表述：<span className="stratum-tag">{relation.stratumB}</span>
+                    <span className="relation-inverse-label">{getRelationInverseLabel(relation.relationType)}</span>
+                    <span className="stratum-tag">{relation.stratumA}</span>
+                  </div>
+                  <p className="record-time">{relation.createdAt}</p>
+                </div>
+                <button className="relation-delete" onClick={() => handleDeleteRelation(relation.id)} title="删除此关系">
+                  删除
+                </button>
+              </article>
             ))
           )}
         </div>
