@@ -11,6 +11,8 @@ interface ArtifactRecord {
   depth: string;
   remarks: string;
   createdAt: string;
+  relicUnit?: string;
+  quantity?: string;
 }
 
 interface ArtifactFormData {
@@ -70,6 +72,42 @@ interface StratumRelationFormData {
 }
 
 type StratumRelationFormErrors = Partial<Record<keyof StratumRelationFormData | "conflict", string>>;
+
+interface BatchImportRow {
+  rowNumber: number;
+  trenchNumber: string;
+  stratum: string;
+  relicUnit: string;
+  coordinatePoint: string;
+  depth: string;
+  artifactType: string;
+  quantity: string;
+}
+
+interface ParsedImportResult {
+  validRows: BatchImportRow[];
+  errorRows: { row: BatchImportRow; errors: string[] }[];
+}
+
+const batchImportHeaders = [
+  { key: "trenchNumber", label: "探方", required: true },
+  { key: "stratum", label: "地层", required: true },
+  { key: "relicUnit", label: "遗迹单位", required: false },
+  { key: "coordinatePoint", label: "坐标点", required: true },
+  { key: "depth", label: "深度", required: true },
+  { key: "artifactType", label: "类型", required: true },
+  { key: "quantity", label: "数量", required: true }
+];
+
+const HEADER_ALIASES: Record<string, string> = {
+  "探方": "trenchNumber", "探方编号": "trenchNumber", "trench": "trenchNumber", "trenchnumber": "trenchNumber",
+  "地层": "stratum", "层位": "stratum", "stratum": "stratum",
+  "遗迹单位": "relicUnit", "遗迹": "relicUnit", "relic": "relicUnit", "relicunit": "relicUnit",
+  "坐标点": "coordinatePoint", "坐标": "coordinatePoint", "coordinate": "coordinatePoint", "coordinates": "coordinatePoint",
+  "深度": "depth", "depth": "depth",
+  "类型": "artifactType", "出土物类型": "artifactType", "type": "artifactType", "artifacttype": "artifactType",
+  "数量": "quantity", "件数": "quantity", "qty": "quantity", "quantity": "quantity"
+};
 
 const relationTypeOptions: { value: RelationType; label: string; description: string; inverse: string }[] = [
   { value: "earlier", label: "早于", description: "A 的年代早于 B", inverse: "晚于" },
@@ -239,6 +277,10 @@ function App() {
     relationType: ""
   });
   const [relationFormErrors, setRelationFormErrors] = useState<StratumRelationFormErrors>({});
+
+  const [batchCsvText, setBatchCsvText] = useState<string>("");
+  const [batchParseResult, setBatchParseResult] = useState<ParsedImportResult | null>(null);
+  const [batchParseError, setBatchParseError] = useState<string>("");
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -543,6 +585,159 @@ function App() {
     setStratumRelations(prev => prev.filter(r => r.id !== id));
   };
 
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === "," && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const normalizeHeader = (header: string): string | null => {
+    const trimmed = header.trim().toLowerCase();
+    for (const [alias, key] of Object.entries(HEADER_ALIASES)) {
+      if (alias.toLowerCase() === trimmed || trimmed === key.toLowerCase()) {
+        return key;
+      }
+    }
+    return null;
+  };
+
+  const parseCoordinate = (coord: string): { eCoordinate: string; nCoordinate: string } => {
+    const clean = coord.trim().toUpperCase();
+    const eMatch = clean.match(/E\s*([\d.]+)/);
+    const nMatch = clean.match(/N\s*([\d.]+)/);
+    if (eMatch && nMatch) {
+      return { eCoordinate: eMatch[1], nCoordinate: nMatch[1] };
+    }
+    const parts = clean.split(/[\s,，、]+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return { eCoordinate: parts[0], nCoordinate: parts[1] };
+    }
+    return { eCoordinate: "", nCoordinate: "" };
+  };
+
+  const validateBatchRow = (row: BatchImportRow): string[] => {
+    const errors: string[] = [];
+    if (!row.trenchNumber.trim()) errors.push("探方不能为空");
+    if (!row.stratum.trim()) errors.push("地层不能为空");
+    if (!row.coordinatePoint.trim()) {
+      errors.push("坐标点不能为空");
+    } else {
+      const { eCoordinate, nCoordinate } = parseCoordinate(row.coordinatePoint);
+      if (!eCoordinate || !nCoordinate) errors.push("坐标点格式无效，需包含E和N坐标（如 E3.25 N4.50）");
+    }
+    if (!row.depth.trim()) errors.push("深度不能为空");
+    if (!row.artifactType.trim()) {
+      errors.push("类型不能为空");
+    } else if (!artifactTypes.includes(row.artifactType.trim())) {
+      errors.push(`类型必须是：${artifactTypes.join("、")} 之一`);
+    }
+    if (!row.quantity.trim()) {
+      errors.push("数量不能为空");
+    } else if (!/^\d+$/.test(row.quantity.trim()) || parseInt(row.quantity.trim()) <= 0) {
+      errors.push("数量必须是正整数");
+    }
+    return errors;
+  };
+
+  const handleBatchParse = () => {
+    setBatchParseError("");
+    setBatchParseResult(null);
+    const text = batchCsvText.trim();
+    if (!text) {
+      setBatchParseError("请粘贴CSV文本内容");
+      return;
+    }
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length < 2) {
+      setBatchParseError("CSV内容至少需要表头行和一行数据");
+      return;
+    }
+    const headerLine = lines[0];
+    const rawHeaders = parseCsvLine(headerLine);
+    const mappedHeaders: (string | null)[] = rawHeaders.map(h => normalizeHeader(h));
+    const missingRequired = batchImportHeaders.filter(h => h.required).filter(
+      req => !mappedHeaders.includes(req.key)
+    );
+    if (missingRequired.length > 0) {
+      setBatchParseError(`缺少必要列：${missingRequired.map(h => h.label).join("、")}。请检查表头是否正确。`);
+      return;
+    }
+    const headerIndexMap: Record<string, number> = {};
+    mappedHeaders.forEach((key, idx) => {
+      if (key) headerIndexMap[key] = idx;
+    });
+    const validRows: BatchImportRow[] = [];
+    const errorRows: { row: BatchImportRow; errors: string[] }[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const rawValues = parseCsvLine(lines[i]);
+      const rowNumber = i + 1;
+      const row: BatchImportRow = {
+        rowNumber,
+        trenchNumber: rawValues[headerIndexMap["trenchNumber"]] ?? "",
+        stratum: rawValues[headerIndexMap["stratum"]] ?? "",
+        relicUnit: rawValues[headerIndexMap["relicUnit"]] ?? "",
+        coordinatePoint: rawValues[headerIndexMap["coordinatePoint"]] ?? "",
+        depth: rawValues[headerIndexMap["depth"]] ?? "",
+        artifactType: rawValues[headerIndexMap["artifactType"]] ?? "",
+        quantity: rawValues[headerIndexMap["quantity"]] ?? ""
+      };
+      const errors = validateBatchRow(row);
+      if (errors.length === 0) {
+        validRows.push(row);
+      } else {
+        errorRows.push({ row, errors });
+      }
+    }
+    setBatchParseResult({ validRows, errorRows });
+  };
+
+  const handleBatchConfirm = () => {
+    if (!batchParseResult || batchParseResult.validRows.length === 0) return;
+    const now = new Date().toLocaleString("zh-CN");
+    const newRecords: ArtifactRecord[] = batchParseResult.validRows.map((row, idx) => {
+      const coords = parseCoordinate(row.coordinatePoint);
+      return {
+        id: Date.now() + idx,
+        trenchNumber: row.trenchNumber.trim(),
+        stratum: row.stratum.trim(),
+        artifactType: row.artifactType.trim(),
+        eCoordinate: coords.eCoordinate,
+        nCoordinate: coords.nCoordinate,
+        depth: row.depth.trim(),
+        remarks: "",
+        createdAt: now,
+        relicUnit: row.relicUnit.trim() || undefined,
+        quantity: row.quantity.trim()
+      };
+    });
+    setArtifactRecords(prev => [...newRecords, ...prev]);
+    handleBatchClear();
+  };
+
+  const handleBatchClear = () => {
+    setBatchCsvText("");
+    setBatchParseResult(null);
+    setBatchParseError("");
+  };
+
   const filterProjectRecords = (records: string[][]): string[][] => {
     return records.filter(record => {
       const [trench, stratumInfo, relicInfo, artifactInfo] = record;
@@ -722,6 +917,150 @@ function App() {
         </div>
       </section>
 
+      <section className="panel batch-import-section">
+        <div className="section-heading">
+          <div>
+            <p>批量录入</p>
+            <h2>出土物批量导入预览</h2>
+          </div>
+          <div className="form-actions">
+            <button onClick={handleBatchClear}>清空内容</button>
+            <button className="primary-action" onClick={handleBatchParse}>解析预览</button>
+          </div>
+        </div>
+        <div className="batch-import-hint">
+          <p>
+            <strong>使用说明：</strong>
+            请在下方粘贴 CSV 格式文本，首行为表头。必填字段：<span className="required-field">探方、地层、坐标点、深度、类型、数量</span>；可选字段：遗迹单位。
+            坐标点格式示例：<code>E3.25 N4.50</code> 或 <code>3.25,4.50</code>。
+          </p>
+          <p className="csv-example">
+            <strong>示例CSV：</strong>
+            <code>探方,地层,遗迹单位,坐标点,深度,类型,数量
+T0203,第3层,H12,E3.25 N4.50,0.85m,陶片,12
+T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
+          </p>
+        </div>
+        <label className="full-width">
+          <span>CSV 文本粘贴区 <span className="required">*</span></span>
+          <textarea
+            className="batch-textarea"
+            placeholder="在此粘贴CSV文本，第一行为表头..."
+            value={batchCsvText}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBatchCsvText(e.target.value)}
+            rows={8}
+          />
+        </label>
+        {batchParseError && (
+          <div className="batch-alert batch-alert-error">
+            <span className="conflict-icon">✕</span>
+            <span>{batchParseError}</span>
+          </div>
+        )}
+        {batchParseResult && (
+          <div className="batch-preview-area">
+            <div className="batch-summary">
+              <div className="summary-item summary-valid">
+                <span className="summary-count">{batchParseResult.validRows.length}</span>
+                <span className="summary-label">条有效记录</span>
+              </div>
+              <div className="summary-item summary-error">
+                <span className="summary-count">{batchParseResult.errorRows.length}</span>
+                <span className="summary-label">条错误记录</span>
+              </div>
+              <div className="summary-actions">
+                <button
+                  className="primary-action batch-confirm-btn"
+                  onClick={handleBatchConfirm}
+                  disabled={batchParseResult.validRows.length === 0}
+                >
+                  确认导入 {batchParseResult.validRows.length} 条有效记录
+                </button>
+              </div>
+            </div>
+            {batchParseResult.validRows.length > 0 && (
+              <div className="preview-table-wrapper">
+                <div className="preview-table-title">
+                  <h3>✓ 有效数据预览（将被导入）</h3>
+                </div>
+                <div className="table-scroll">
+                  <table className="preview-table preview-table-valid">
+                    <thead>
+                      <tr>
+                        <th>行号</th>
+                        {batchImportHeaders.map(h => (
+                          <th key={h.key}>
+                            {h.label}
+                            {h.required && <span className="required">*</span>}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchParseResult.validRows.map((row) => (
+                        <tr key={`valid-${row.rowNumber}`}>
+                          <td className="row-num">{row.rowNumber}</td>
+                          <td>{row.trenchNumber}</td>
+                          <td>{row.stratum}</td>
+                          <td>{row.relicUnit || <span className="cell-muted">—</span>}</td>
+                          <td>{row.coordinatePoint}</td>
+                          <td>{row.depth}</td>
+                          <td>
+                            <span className="type-badge">{row.artifactType}</span>
+                          </td>
+                          <td className="qty-cell">{row.quantity}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {batchParseResult.errorRows.length > 0 && (
+              <div className="preview-table-wrapper">
+                <div className="preview-table-title">
+                  <h3 className="error-title">⚠ 错误数据摘要（将被忽略）</h3>
+                </div>
+                <div className="table-scroll">
+                  <table className="preview-table preview-table-error">
+                    <thead>
+                      <tr>
+                        <th>行号</th>
+                        {batchImportHeaders.map(h => (
+                          <th key={h.key}>{h.label}</th>
+                        ))}
+                        <th>错误信息</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchParseResult.errorRows.map(({ row, errors }) => (
+                        <tr key={`err-${row.rowNumber}`}>
+                          <td className="row-num row-num-error">{row.rowNumber}</td>
+                          <td>{row.trenchNumber || <span className="cell-muted">—</span>}</td>
+                          <td>{row.stratum || <span className="cell-muted">—</span>}</td>
+                          <td>{row.relicUnit || <span className="cell-muted">—</span>}</td>
+                          <td>{row.coordinatePoint || <span className="cell-muted">—</span>}</td>
+                          <td>{row.depth || <span className="cell-muted">—</span>}</td>
+                          <td>{row.artifactType || <span className="cell-muted">—</span>}</td>
+                          <td>{row.quantity || <span className="cell-muted">—</span>}</td>
+                          <td className="error-cell">
+                            <ul>
+                              {errors.map((err, idx) => (
+                                <li key={idx}>{err}</li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       <section className="panel search-panel">
         <div className="section-heading">
           <div>
@@ -831,8 +1170,15 @@ function App() {
                 <article key={record.id} className="record-card">
                   <div className="record-index artifact-index">{String(index + 1).padStart(2, "0")}</div>
                   <div>
-                    <h3>{record.trenchNumber} · {record.artifactType}</h3>
-                    <p>地层：{record.stratum} · 坐标：E{record.eCoordinate} N{record.nCoordinate} · 深度：{record.depth}</p>
+                    <h3>
+                      {record.trenchNumber} · {record.artifactType}
+                      {record.quantity && <span className="qty-tag">×{record.quantity}</span>}
+                    </h3>
+                    <p>
+                      地层：{record.stratum}
+                      {record.relicUnit && ` · 遗迹：${record.relicUnit}`}
+                      {" · 坐标：E"}{record.eCoordinate} N{record.nCoordinate} · 深度：{record.depth}
+                    </p>
                     {record.remarks && <p className="record-remarks">备注：{record.remarks}</p>}
                     <p className="record-time">{record.createdAt}</p>
                   </div>
