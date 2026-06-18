@@ -23,6 +23,13 @@ interface ArtifactFormData {
   remarks: string;
 }
 
+interface SearchFilters {
+  trenchNumber: string;
+  stratum: string;
+  relicUnit: string;
+  artifactKeyword: string;
+}
+
 type FormErrors = Partial<Record<keyof ArtifactFormData, string>>;
 
 const project = {
@@ -112,6 +119,12 @@ function App() {
     remarks: ""
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    trenchNumber: "",
+    stratum: "",
+    relicUnit: "",
+    artifactKeyword: ""
+  });
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -181,6 +194,56 @@ function App() {
     });
     setFormErrors({});
   };
+
+  const handleSearchChange = (field: keyof SearchFilters, value: string) => {
+    setSearchFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleClearSearch = () => {
+    setSearchFilters({
+      trenchNumber: "",
+      stratum: "",
+      relicUnit: "",
+      artifactKeyword: ""
+    });
+  };
+
+  const filterProjectRecords = (records: string[][]): string[][] => {
+    return records.filter(record => {
+      const [trench, stratumInfo, relicInfo, artifactInfo] = record;
+      const matchTrench = !searchFilters.trenchNumber || 
+        trench.toLowerCase().includes(searchFilters.trenchNumber.toLowerCase());
+      const matchStratum = !searchFilters.stratum || 
+        stratumInfo.toLowerCase().includes(searchFilters.stratum.toLowerCase());
+      const matchRelic = !searchFilters.relicUnit || 
+        relicInfo.toLowerCase().includes(searchFilters.relicUnit.toLowerCase()) ||
+        stratumInfo.toLowerCase().includes(searchFilters.relicUnit.toLowerCase());
+      const matchArtifact = !searchFilters.artifactKeyword || 
+        artifactInfo.toLowerCase().includes(searchFilters.artifactKeyword.toLowerCase());
+      return matchTrench && matchStratum && matchRelic && matchArtifact;
+    });
+  };
+
+  const filterArtifactRecords = (records: ArtifactRecord[]): ArtifactRecord[] => {
+    return records.filter(record => {
+      const matchTrench = !searchFilters.trenchNumber || 
+        record.trenchNumber.toLowerCase().includes(searchFilters.trenchNumber.toLowerCase());
+      const matchStratum = !searchFilters.stratum || 
+        record.stratum.toLowerCase().includes(searchFilters.stratum.toLowerCase());
+      const matchRelic = !searchFilters.relicUnit || 
+        record.stratum.toLowerCase().includes(searchFilters.relicUnit.toLowerCase()) ||
+        record.remarks.toLowerCase().includes(searchFilters.relicUnit.toLowerCase());
+      const matchArtifact = !searchFilters.artifactKeyword || 
+        record.artifactType.toLowerCase().includes(searchFilters.artifactKeyword.toLowerCase()) ||
+        record.remarks.toLowerCase().includes(searchFilters.artifactKeyword.toLowerCase());
+      return matchTrench && matchStratum && matchRelic && matchArtifact;
+    });
+  };
+
+  const hasActiveFilters = Object.values(searchFilters).some(v => v.trim() !== "");
+
+  const filteredProjectRecords = filterProjectRecords(project.records);
+  const filteredArtifactRecords = filterArtifactRecords(artifactRecords);
 
   return (
     <main className="app-shell">
@@ -324,6 +387,57 @@ function App() {
         </div>
       </section>
 
+      <section className="panel search-panel">
+        <div className="section-heading">
+          <div>
+            <p>检索</p>
+            <h2>探方快速检索</h2>
+          </div>
+          <button onClick={handleClearSearch} disabled={!hasActiveFilters}>
+            清除筛选
+          </button>
+        </div>
+        <div className="field-grid">
+          <label>
+            <span>探方编号</span>
+            <input
+              placeholder="如 T0203"
+              value={searchFilters.trenchNumber}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearchChange("trenchNumber", e.target.value)}
+            />
+          </label>
+          <label>
+            <span>地层名称</span>
+            <input
+              placeholder="如 第3层"
+              value={searchFilters.stratum}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearchChange("stratum", e.target.value)}
+            />
+          </label>
+          <label>
+            <span>遗迹单位</span>
+            <input
+              placeholder="如 H12、F2"
+              value={searchFilters.relicUnit}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearchChange("relicUnit", e.target.value)}
+            />
+          </label>
+          <label>
+            <span>出土物关键词</span>
+            <input
+              placeholder="如 陶片、动物骨"
+              value={searchFilters.artifactKeyword}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearchChange("artifactKeyword", e.target.value)}
+            />
+          </label>
+        </div>
+        {hasActiveFilters && (
+          <p className="search-result-info">
+            筛选结果：示例记录 {filteredProjectRecords.length} 条 · 采集记录 {filteredArtifactRecords.length} 条
+          </p>
+        )}
+      </section>
+
       <section className="records-section">
         <section className="panel records">
           <div className="section-heading">
@@ -331,18 +445,30 @@ function App() {
               <p>示例数据</p>
               <h2>近期记录</h2>
             </div>
-            <button>导出摘要</button>
+            <div>
+              {hasActiveFilters && <span className="filter-badge">筛选中</span>}
+              <button>导出摘要</button>
+            </div>
           </div>
           <div className="record-list">
-            {project.records.map((record: string[], index: number) => (
-              <article key={record.join("-")} className="record-card">
-                <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-                <div>
-                  <h3>{record[0]}</h3>
-                  <p>{record.slice(1).join(" · ")}</p>
-                </div>
-              </article>
-            ))}
+            {filteredProjectRecords.length === 0 ? (
+              <div className="empty-state-detail">
+                <p className="empty-state">暂无匹配的示例记录</p>
+                {hasActiveFilters && (
+                  <p className="empty-state-hint">请尝试调整筛选条件，或点击"清除筛选"查看全部记录</p>
+                )}
+              </div>
+            ) : (
+              filteredProjectRecords.map((record: string[], index: number) => (
+                <article key={record.join("-")} className="record-card">
+                  <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
+                  <div>
+                    <h3>{record[0]}</h3>
+                    <p>{record.slice(1).join(" · ")}</p>
+                  </div>
+                </article>
+              ))
+            )}
           </div>
         </section>
 
@@ -352,13 +478,21 @@ function App() {
               <p>采集数据</p>
               <h2>出土物坐标记录</h2>
             </div>
-            <div>共 {artifactRecords.length} 条</div>
+            <div>
+              {hasActiveFilters && <span className="filter-badge">筛选中</span>}
+              <div>共 {hasActiveFilters ? filteredArtifactRecords.length : artifactRecords.length} 条</div>
+            </div>
           </div>
           <div className="record-list">
-            {artifactRecords.length === 0 ? (
+            {hasActiveFilters && filteredArtifactRecords.length === 0 ? (
+              <div className="empty-state-detail">
+                <p className="empty-state">暂无匹配的采集记录</p>
+                <p className="empty-state-hint">请尝试调整筛选条件，或点击"清除筛选"查看全部记录</p>
+              </div>
+            ) : artifactRecords.length === 0 ? (
               <p className="empty-state">暂无出土物坐标记录，请在上方表单录入</p>
             ) : (
-              artifactRecords.map((record: ArtifactRecord, index: number) => (
+              filteredArtifactRecords.map((record: ArtifactRecord, index: number) => (
                 <article key={record.id} className="record-card">
                   <div className="record-index artifact-index">{String(index + 1).padStart(2, "0")}</div>
                   <div>
