@@ -260,10 +260,95 @@ input {
   line-height: 1.6;
 }
 
+.artifact-collection {
+  margin-bottom: 20px;
+}
+
+.artifact-collection .field-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.form-actions .primary-action {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.required {
+  color: #e11d48;
+  margin-left: 2px;
+}
+
+.input-error {
+  border-color: #e11d48 !important;
+  background: #fef2f2;
+}
+
+.error-text {
+  color: #e11d48;
+  font-size: 12px;
+  margin-top: -4px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #172033;
+  background: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.records-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.records {
+  margin-bottom: 0;
+}
+
+.artifact-index {
+  background: var(--accent) !important;
+}
+
+.record-remarks {
+  color: #64748b;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.record-time {
+  color: #94a3b8;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #94a3b8;
+  padding: 32px 16px;
+  margin-bottom: 0;
+}
+
 @media (max-width: 860px) {
   .hero,
   .workspace,
-  .metrics-grid {
+  .metrics-grid,
+  .records-section,
+  .artifact-collection .field-grid {
     grid-template-columns: 1fr;
   }
 
