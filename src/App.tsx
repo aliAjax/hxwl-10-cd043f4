@@ -199,6 +199,158 @@ const artifactTypes = ["陶片", "石器", "骨器", "青铜器", "瓷器", "铁
 
 const weatherOptions = ["晴", "多云", "阴", "小雨", "中雨", "大雨", "小雪", "中雪", "雾", "霾"];
 
+const initialArtifactRecords: ArtifactRecord[] = [
+  {
+    id: 1001,
+    trenchNumber: "T0203",
+    stratum: "第3层",
+    artifactType: "陶片",
+    eCoordinate: "3.25",
+    nCoordinate: "4.50",
+    depth: "0.85m",
+    remarks: "绳纹陶片，可辨器形有鬲口沿",
+    createdAt: "2024/6/17 09:20:00",
+    quantity: "12"
+  },
+  {
+    id: 1002,
+    trenchNumber: "T0203",
+    stratum: "第3层",
+    artifactType: "石器",
+    eCoordinate: "1.80",
+    nCoordinate: "2.35",
+    depth: "0.92m",
+    remarks: "石斧残件，磨制精细",
+    createdAt: "2024/6/17 09:45:00",
+    quantity: "1"
+  },
+  {
+    id: 1003,
+    trenchNumber: "T0203",
+    stratum: "第3层",
+    artifactType: "骨器",
+    eCoordinate: "4.10",
+    nCoordinate: "1.20",
+    depth: "0.78m",
+    remarks: "骨簪一枚，保存较好",
+    createdAt: "2024/6/17 10:10:00",
+    quantity: "1"
+  },
+  {
+    id: 1004,
+    trenchNumber: "T0203",
+    stratum: "第2层",
+    artifactType: "陶片",
+    eCoordinate: "2.55",
+    nCoordinate: "3.80",
+    depth: "0.45m",
+    remarks: "泥质灰陶，素面",
+    createdAt: "2024/6/17 10:35:00",
+    quantity: "5"
+  },
+  {
+    id: 1005,
+    trenchNumber: "T0203",
+    stratum: "第2层",
+    artifactType: "瓷器",
+    eCoordinate: "5.00",
+    nCoordinate: "5.00",
+    depth: "0.32m",
+    remarks: "青花瓷片，明清时期",
+    createdAt: "2024/6/17 11:00:00",
+    quantity: "2"
+  },
+  {
+    id: 1006,
+    trenchNumber: "T0204",
+    stratum: "H12灰坑",
+    artifactType: "动植物遗存",
+    eCoordinate: "2.10",
+    nCoordinate: "3.40",
+    depth: "1.25m",
+    remarks: "炭化粟粒，需浮选鉴定",
+    createdAt: "2024/6/17 14:15:00",
+    relicUnit: "H12",
+    quantity: "大量"
+  },
+  {
+    id: 1007,
+    trenchNumber: "T0204",
+    stratum: "H12灰坑",
+    artifactType: "骨器",
+    eCoordinate: "3.75",
+    nCoordinate: "2.60",
+    depth: "1.38m",
+    remarks: "动物骨骼碎片，疑似猪骨",
+    createdAt: "2024/6/17 14:40:00",
+    relicUnit: "H12",
+    quantity: "8"
+  },
+  {
+    id: 1008,
+    trenchNumber: "T0204",
+    stratum: "H12灰坑",
+    artifactType: "陶片",
+    eCoordinate: "4.50",
+    nCoordinate: "4.20",
+    depth: "1.15m",
+    remarks: "夹砂褐陶，绳纹",
+    createdAt: "2024/6/17 15:05:00",
+    relicUnit: "H12",
+    quantity: "20"
+  },
+  {
+    id: 1009,
+    trenchNumber: "T0204",
+    stratum: "第2层",
+    artifactType: "铁器",
+    eCoordinate: "1.25",
+    nCoordinate: "1.80",
+    depth: "0.38m",
+    remarks: "铁钉，锈蚀严重",
+    createdAt: "2024/6/17 15:30:00",
+    quantity: "3"
+  },
+  {
+    id: 1010,
+    trenchNumber: "T0301",
+    stratum: "F2房址",
+    artifactType: "陶片",
+    eCoordinate: "",
+    nCoordinate: "3.50",
+    depth: "0.60m",
+    remarks: "缺少E坐标，坐标待补测",
+    createdAt: "2024/6/17 16:00:00",
+    relicUnit: "F2",
+    quantity: "4"
+  },
+  {
+    id: 1011,
+    trenchNumber: "T0301",
+    stratum: "F2房址",
+    artifactType: "石器",
+    eCoordinate: "2.90",
+    nCoordinate: "abc",
+    depth: "0.65m",
+    remarks: "N坐标格式错误",
+    createdAt: "2024/6/17 16:20:00",
+    relicUnit: "F2",
+    quantity: "1"
+  },
+  {
+    id: 1012,
+    trenchNumber: "T0203",
+    stratum: "第3层",
+    artifactType: "其他",
+    eCoordinate: "",
+    nCoordinate: "",
+    depth: "0.80m",
+    remarks: "未记录坐标点",
+    createdAt: "2024/6/17 16:45:00",
+    quantity: "1"
+  }
+];
+
 const initialExcavationLogs: ExcavationLog[] = [
   {
     id: 1,
@@ -242,8 +394,59 @@ function MetricCard({ label, value, index }: { label: string; value: string; ind
   );
 }
 
+const parseNumber = (value: string): number | null => {
+  if (!value || value.trim() === "") return null;
+  const num = parseFloat(value);
+  return isNaN(num) ? null : num;
+};
+
+interface ValidatedArtifactRecord extends ArtifactRecord {
+  eValue: number | null;
+  nValue: number | null;
+  isCoordinateValid: boolean;
+  coordinateError?: string;
+}
+
+const validateRecordCoordinates = (record: ArtifactRecord): ValidatedArtifactRecord => {
+  const eValue = parseNumber(record.eCoordinate);
+  const nValue = parseNumber(record.nCoordinate);
+  let isCoordinateValid = true;
+  let coordinateError: string | undefined;
+
+  if (eValue === null && nValue === null) {
+    isCoordinateValid = false;
+    coordinateError = "E和N坐标均为空";
+  } else if (eValue === null) {
+    isCoordinateValid = false;
+    coordinateError = "E坐标为空或格式错误";
+  } else if (nValue === null) {
+    isCoordinateValid = false;
+    coordinateError = "N坐标为空或格式错误";
+  } else if (eValue < 0 || nValue < 0) {
+    isCoordinateValid = false;
+    coordinateError = "坐标不能为负数";
+  }
+
+  return { ...record, eValue, nValue, isCoordinateValid, coordinateError };
+};
+
+const artifactTypeColors: Record<string, string> = {
+  "陶片": "#854d0e",
+  "石器": "#475569",
+  "骨器": "#92400e",
+  "青铜器": "#ca8a04",
+  "瓷器": "#0891b2",
+  "铁器": "#78716c",
+  "动植物遗存": "#16a34a",
+  "其他": "#db2777"
+};
+
+const getArtifactTypeColor = (type: string): string => {
+  return artifactTypeColors[type] || "#6b7280";
+};
+
 function App() {
-  const [artifactRecords, setArtifactRecords] = useState<ArtifactRecord[]>([]);
+  const [artifactRecords, setArtifactRecords] = useState<ArtifactRecord[]>(initialArtifactRecords);
   const [formData, setFormData] = useState<ArtifactFormData>({
     trenchNumber: "",
     stratum: "",
@@ -261,6 +464,11 @@ function App() {
     artifactKeyword: ""
   });
   const [excavationLogs, setExcavationLogs] = useState<ExcavationLog[]>(initialExcavationLogs);
+
+  const [gridTrenchFilter, setGridTrenchFilter] = useState<string>("");
+  const [gridStratumFilter, setGridStratumFilter] = useState<string>("");
+  const [hoveredPoint, setHoveredPoint] = useState<ValidatedArtifactRecord | null>(null);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [logFormData, setLogFormData] = useState<ExcavationLogFormData>({
     date: new Date().toISOString().split("T")[0],
     weather: "",
@@ -289,6 +497,92 @@ function App() {
     }
     return String(base + index * 3);
   });
+
+  const validatedRecords: ValidatedArtifactRecord[] = artifactRecords.map(validateRecordCoordinates);
+
+  const availableGridTrenches: string[] = Array.from(
+    new Set(validatedRecords.map(r => r.trenchNumber).filter(Boolean))
+  ).sort();
+
+  const defaultTrench = availableGridTrenches.length > 0 ? availableGridTrenches[0] : "";
+  const actualTrenchFilter = gridTrenchFilter || defaultTrench;
+
+  const availableGridStrata: string[] = Array.from(
+    new Set(
+      validatedRecords
+        .filter(r => !actualTrenchFilter || r.trenchNumber === actualTrenchFilter)
+        .map(r => r.stratum)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const effectiveStratumFilter = availableGridStrata.includes(gridStratumFilter)
+    ? gridStratumFilter
+    : "";
+  const defaultStratum = availableGridStrata.length > 0 ? availableGridStrata[0] : "";
+  const actualStratumFilter = effectiveStratumFilter || defaultStratum;
+
+  const gridFilteredRecords: ValidatedArtifactRecord[] = validatedRecords.filter(r => {
+    const matchTrench = !actualTrenchFilter || r.trenchNumber === actualTrenchFilter;
+    const matchStratum = !actualStratumFilter || r.stratum === actualStratumFilter;
+    return matchTrench && matchStratum;
+  });
+
+  const validGridPoints = gridFilteredRecords.filter(r => r.isCoordinateValid);
+  const invalidGridRecords = gridFilteredRecords.filter(r => !r.isCoordinateValid);
+
+  const gridMaxE = validGridPoints.length > 0
+    ? Math.max(...validGridPoints.map(r => r.eValue!).filter(v => v !== null && !isNaN(v)), 5)
+    : 5;
+  const gridMaxN = validGridPoints.length > 0
+    ? Math.max(...validGridPoints.map(r => r.nValue!).filter(v => v !== null && !isNaN(v)), 5)
+    : 5;
+
+  const GRID_CELL_SIZE = 60;
+  const GRID_PADDING = 40;
+  const gridCols = Math.ceil(gridMaxE) + 1;
+  const gridRows = Math.ceil(gridMaxN) + 1;
+  const gridWidth = gridCols * GRID_CELL_SIZE + GRID_PADDING * 2;
+  const gridHeight = gridRows * GRID_CELL_SIZE + GRID_PADDING * 2;
+
+  const mapPointToGrid = (e: number, n: number): { x: number; y: number } => {
+    return {
+      x: GRID_PADDING + e * GRID_CELL_SIZE,
+      y: GRID_PADDING + (gridRows - 1 - n) * GRID_CELL_SIZE
+    };
+  };
+
+  const handleGridPointHover = (
+    e: React.MouseEvent<HTMLDivElement>,
+    record: ValidatedArtifactRecord | null
+  ) => {
+    if (record) {
+      const rect = (e.currentTarget.closest(".grid-container") as HTMLElement).getBoundingClientRect();
+      setHoveredPoint(record);
+      setHoverPosition({
+        x: e.clientX - rect.left + 15,
+        y: e.clientY - rect.top + 15
+      });
+    } else {
+      setHoveredPoint(null);
+      setHoverPosition(null);
+    }
+  };
+
+  const handleGridMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (hoveredPoint) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setHoverPosition({
+        x: e.clientX - rect.left + 15,
+        y: e.clientY - rect.top + 15
+      });
+    }
+  };
+
+  const handleGridTrenchChange = (value: string) => {
+    setGridTrenchFilter(value);
+    setGridStratumFilter("");
+  };
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
@@ -1059,6 +1353,258 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             )}
           </div>
         )}
+      </section>
+
+      <section className="panel coordinate-view-section">
+        <div className="section-heading">
+          <div>
+            <p>可视化</p>
+            <h2>探方平面坐标视图</h2>
+          </div>
+          <div className="coordinate-view-summary">
+            <span className="summary-badge valid">
+              有效点位 {validGridPoints.length}
+            </span>
+            <span className="summary-badge invalid">
+              异常记录 {invalidGridRecords.length}
+            </span>
+          </div>
+        </div>
+
+        <div className="coordinate-view-body">
+          <div className="coordinate-view-main">
+            <div className="grid-filters">
+              <label className="grid-filter-item">
+                <span>探方编号</span>
+                <select
+                  value={actualTrenchFilter}
+                  onChange={(e) => handleGridTrenchChange(e.target.value)}
+                >
+                  <option value="">全部探方</option>
+                  {availableGridTrenches.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid-filter-item">
+                <span>地层</span>
+                <select
+                  value={actualStratumFilter}
+                  onChange={(e) => setGridStratumFilter(e.target.value)}
+                >
+                  <option value="">全部地层</option>
+                  {availableGridStrata.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid-legend">
+                <span className="legend-label">图例：</span>
+                {artifactTypes.map(type => (
+                  <span key={type} className="legend-item">
+                    <i className="legend-dot" style={{ background: getArtifactTypeColor(type) }} />
+                    {type}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="grid-container"
+              onMouseMove={handleGridMouseMove}
+              onMouseLeave={() => { setHoveredPoint(null); setHoverPosition(null); }}
+            >
+              {actualTrenchFilter ? (
+                <div className="grid-wrapper" style={{ width: gridWidth, height: gridHeight }}>
+                  {Array.from({ length: gridRows }).map((_, rowIdx) => (
+                    Array.from({ length: gridCols }).map((_, colIdx) => {
+                      const n = gridRows - 1 - rowIdx;
+                      const e = colIdx;
+                      return (
+                        <div
+                          key={`cell-${e}-${n}`}
+                          className="grid-cell"
+                          style={{
+                            left: GRID_PADDING + colIdx * GRID_CELL_SIZE,
+                            top: GRID_PADDING + rowIdx * GRID_CELL_SIZE,
+                            width: GRID_CELL_SIZE,
+                            height: GRID_CELL_SIZE
+                          }}
+                        />
+                      );
+                    })
+                  ))}
+
+                  {Array.from({ length: gridCols }).map((_, e) => (
+                    <span
+                      key={`e-label-${e}`}
+                      className="grid-axis-label grid-axis-e"
+                      style={{
+                        left: GRID_PADDING + e * GRID_CELL_SIZE + GRID_CELL_SIZE / 2,
+                        bottom: 12
+                      }}
+                    >
+                      E{e}
+                    </span>
+                  ))}
+                  {Array.from({ length: gridRows }).map((_, i) => {
+                    const n = gridRows - 1 - i;
+                    return (
+                      <span
+                        key={`n-label-${n}`}
+                        className="grid-axis-label grid-axis-n"
+                        style={{
+                          left: 12,
+                          top: GRID_PADDING + i * GRID_CELL_SIZE + GRID_CELL_SIZE / 2
+                        }}
+                      >
+                        N{n}
+                      </span>
+                    );
+                  })}
+
+                  <div className="grid-origin-label" style={{ left: 8, bottom: 8 }}>
+                    ← 西南角 (原点)
+                  </div>
+
+                  {validGridPoints.map((record) => {
+                    const pos = mapPointToGrid(record.eValue!, record.nValue!);
+                    return (
+                      <div
+                        key={`point-${record.id}`}
+                        className="grid-point"
+                        style={{
+                          left: pos.x,
+                          top: pos.y,
+                          background: getArtifactTypeColor(record.artifactType),
+                          boxShadow: `0 0 0 3px ${getArtifactTypeColor(record.artifactType)}40`
+                        }}
+                        onMouseEnter={(e) => handleGridPointHover(e, record)}
+                        onMouseLeave={(e) => handleGridPointHover(e, null)}
+                      />
+                    );
+                  })}
+
+                  {hoveredPoint && hoverPosition && (
+                    <div
+                      className="grid-tooltip"
+                      style={{
+                        left: Math.min(hoverPosition.x, gridWidth - 240),
+                        top: Math.min(hoverPosition.y, gridHeight - 160)
+                      }}
+                    >
+                      <div className="tooltip-header">
+                        <i
+                          className="tooltip-color-dot"
+                          style={{ background: getArtifactTypeColor(hoveredPoint.artifactType) }}
+                        />
+                        <strong>{hoveredPoint.artifactType}</strong>
+                        {hoveredPoint.quantity && (
+                          <span className="tooltip-qty">×{hoveredPoint.quantity}</span>
+                        )}
+                      </div>
+                      <div className="tooltip-row">
+                        <span>探方</span>
+                        <strong>{hoveredPoint.trenchNumber}</strong>
+                      </div>
+                      <div className="tooltip-row">
+                        <span>地层</span>
+                        <strong>{hoveredPoint.stratum}</strong>
+                      </div>
+                      <div className="tooltip-row">
+                        <span>坐标</span>
+                        <strong>E{hoveredPoint.eCoordinate} · N{hoveredPoint.nCoordinate}</strong>
+                      </div>
+                      <div className="tooltip-row">
+                        <span>深度</span>
+                        <strong>{hoveredPoint.depth}</strong>
+                      </div>
+                      {hoveredPoint.relicUnit && (
+                        <div className="tooltip-row">
+                          <span>遗迹</span>
+                          <strong>{hoveredPoint.relicUnit}</strong>
+                        </div>
+                      )}
+                      {hoveredPoint.remarks && (
+                        <div className="tooltip-remarks">
+                          <span>备注</span>
+                          <p>{hoveredPoint.remarks}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid-empty">
+                  <div className="grid-empty-icon">📐</div>
+                  <p>请先选择探方编号以查看平面坐标分布</p>
+                  {availableGridTrenches.length > 0 && (
+                    <div className="grid-empty-trenches">
+                      <span>可选探方：</span>
+                      {availableGridTrenches.map(t => (
+                        <button
+                          key={t}
+                          className="trench-quick-btn"
+                          onClick={() => handleGridTrenchChange(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="anomaly-list-panel">
+            <div className="anomaly-list-header">
+              <h3>
+                <span className="anomaly-icon">⚠</span>
+                异常记录清单
+              </h3>
+              <span className="anomaly-count">{invalidGridRecords.length} 条</span>
+            </div>
+            {invalidGridRecords.length === 0 ? (
+              <div className="anomaly-empty">
+                <p>🎉 当前筛选条件下无异常记录</p>
+                <p className="anomaly-empty-hint">所有出土物坐标均有效</p>
+              </div>
+            ) : (
+              <div className="anomaly-list">
+                {invalidGridRecords.map((record, idx) => (
+                  <article key={`anomaly-${record.id}`} className="anomaly-card">
+                    <div className="anomaly-index">{String(idx + 1).padStart(2, "0")}</div>
+                    <div className="anomaly-content">
+                      <div className="anomaly-title">
+                        <span className="type-badge">{record.artifactType}</span>
+                        <strong className="anomaly-id">#{record.id}</strong>
+                      </div>
+                      <p className="anomaly-meta">
+                        {record.trenchNumber} · {record.stratum}
+                      </p>
+                      <div className="anomaly-coords">
+                        <span className={record.eValue !== null ? "coord-ok" : "coord-bad"}>
+                          E: {record.eCoordinate || "空"}
+                        </span>
+                        <span className={record.nValue !== null ? "coord-ok" : "coord-bad"}>
+                          N: {record.nCoordinate || "空"}
+                        </span>
+                      </div>
+                      <div className="anomaly-error">
+                        <span className="error-icon">!</span>
+                        {record.coordinateError}
+                      </div>
+                      {record.remarks && (
+                        <p className="anomaly-remarks">备注：{record.remarks}</p>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </aside>
+        </div>
       </section>
 
       <section className="panel search-panel">
