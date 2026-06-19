@@ -2159,13 +2159,6 @@ function App() {
         reasons.push(`与系统现有记录 #${record.id} 重复（探方、地层、坐标、深度、类型均相同）`);
         break;
       }
-
-      if (matchTrench && matchStratum && matchCoord && matchType) {
-        duplicateWithExisting = true;
-        existingRecordId = record.id;
-        reasons.push(`疑似与系统现有记录 #${record.id} 重复（探方、地层、坐标、类型相同，深度不同）`);
-        break;
-      }
     }
 
     if (!duplicateWithExisting) {
@@ -2185,12 +2178,6 @@ function App() {
         if (matchTrench && matchStratum && matchCoord && matchDepth && matchType) {
           duplicateWithBatch = true;
           reasons.push(`与本次导入第 ${processedRow.rowNumber} 行重复（探方、地层、坐标、深度、类型均相同）`);
-          break;
-        }
-
-        if (matchTrench && matchStratum && matchCoord && matchType) {
-          duplicateWithBatch = true;
-          reasons.push(`疑似与本次导入第 ${processedRow.rowNumber} 行重复（探方、地层、坐标、类型相同，深度不同）`);
           break;
         }
       }
@@ -2312,6 +2299,9 @@ function App() {
         errorCount: errorRows.length,
         duplicateCount,
       });
+      setBatchParseResult(null);
+      setBatchCsvText("");
+      setBatchParseError("");
       return;
     }
 
@@ -3011,14 +3001,20 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                   const allRows = [...batchParseResult.validRows, ...batchParseResult.duplicateRows];
                   const importCount = allRows.filter(r => !r.skipImport).length;
                   const skipCount = allRows.filter(r => r.skipImport).length;
-                  const btnLabel = skipCount > 0
-                    ? `确认导入 ${importCount} 条（跳过 ${skipCount} 条重复）`
-                    : `确认导入 ${importCount} 条有效记录`;
+                  const totalRows = allRows.length;
+                  let btnLabel: string;
+                  if (importCount === 0 && totalRows > 0) {
+                    btnLabel = `确认（全部跳过 ${skipCount} 条重复记录）`;
+                  } else if (skipCount > 0) {
+                    btnLabel = `确认导入 ${importCount} 条（跳过 ${skipCount} 条重复）`;
+                  } else {
+                    btnLabel = `确认导入 ${importCount} 条有效记录`;
+                  }
                   return (
                     <button
                       className="primary-action batch-confirm-btn"
                       onClick={handleBatchConfirm}
-                      disabled={importCount === 0}
+                      disabled={totalRows === 0}
                     >
                       {btnLabel}
                     </button>
