@@ -1246,6 +1246,10 @@ function App() {
   const [reviewModalRecord, setReviewModalRecord] = useState<ArtifactRecord | null>(null);
   const [reviewReason, setReviewReason] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<ReviewStatus | "all">("all");
+  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<number>>(new Set());
+  const [showBatchReviewModal, setShowBatchReviewModal] = useState<boolean>(false);
+  const [batchReviewType, setBatchReviewType] = useState<"approve" | "reject">("approve");
+  const [batchReviewReason, setBatchReviewReason] = useState<string>("");
 
   const [artifactRecords, setArtifactRecords] = useState<ArtifactRecord[]>(initialArtifactRecords);
   const [formData, setFormData] = useState<ArtifactFormData>({
@@ -1558,6 +1562,91 @@ function App() {
       }
       return r;
     }));
+  };
+
+  const handleToggleSelect = (id: number) => {
+    setSelectedRecordIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const pendingIds = statusFilteredRecords
+      .filter(r => r.status === "pending")
+      .map(r => r.id);
+    const allSelected = pendingIds.every(id => selectedRecordIds.has(id));
+    if (allSelected) {
+      setSelectedRecordIds(prev => {
+        const next = new Set(prev);
+        pendingIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedRecordIds(prev => {
+        const next = new Set(prev);
+        pendingIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleBatchApprove = () => {
+    setBatchReviewType("approve");
+    setBatchReviewReason("");
+    setShowBatchReviewModal(true);
+  };
+
+  const handleBatchReject = () => {
+    setBatchReviewType("reject");
+    setBatchReviewReason("");
+    setShowBatchReviewModal(true);
+  };
+
+  const confirmBatchApprove = () => {
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (selectedRecordIds.has(r.id) && r.status === "pending") {
+        return {
+          ...r,
+          status: "approved",
+          reviewReason: batchReviewReason || "记录完整，审核通过",
+          reviewedBy: `${roleNames[currentRole]}-当前用户`,
+          reviewedAt: now
+        };
+      }
+      return r;
+    }));
+    setSelectedRecordIds(new Set());
+    setShowBatchReviewModal(false);
+    setBatchReviewReason("");
+  };
+
+  const confirmBatchReject = () => {
+    if (!batchReviewReason.trim()) {
+      return;
+    }
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (selectedRecordIds.has(r.id) && r.status === "pending") {
+        return {
+          ...r,
+          status: "rejected",
+          reviewReason: batchReviewReason,
+          reviewedBy: `${roleNames[currentRole]}-当前用户`,
+          reviewedAt: now
+        };
+      }
+      return r;
+    }));
+    setSelectedRecordIds(new Set());
+    setShowBatchReviewModal(false);
+    setBatchReviewReason("");
   };
 
   const handleClear = () => {
@@ -3558,11 +3647,45 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <p>采集数据</p>
               <h2>出土物坐标记录</h2>
             </div>
-            <div>
+            <div className="section-heading-right">
               {(hasActiveFilters || statusFilter !== "all") && <span className="filter-badge">筛选中</span>}
               <div>共 {statusFilteredRecords.length} 条</div>
             </div>
           </div>
+
+          {currentRole === "leader" && (
+            <div className="batch-action-bar">
+              <label className="select-all-label">
+                <input
+                  type="checkbox"
+                  checked={statusFilteredRecords.filter(r => r.status === "pending").length > 0 && 
+                    statusFilteredRecords.filter(r => r.status === "pending").every(r => selectedRecordIds.has(r.id))}
+                  onChange={handleSelectAll}
+                  disabled={statusFilteredRecords.filter(r => r.status === "pending").length === 0}
+                />
+                <span>全选待审核</span>
+              </label>
+              <div className="batch-action-buttons">
+                <span className="selected-count">
+                  已选 {selectedRecordIds.size} 条
+                </span>
+                <button
+                  className="batch-action-btn batch-approve-btn"
+                  onClick={handleBatchApprove}
+                  disabled={selectedRecordIds.size === 0}
+                >
+                  批量通过
+                </button>
+                <button
+                  className="batch-action-btn batch-reject-btn"
+                  onClick={handleBatchReject}
+                  disabled={selectedRecordIds.size === 0}
+                >
+                  批量退回
+                </button>
+              </div>
+            </div>
+          )}
           <div className="record-list">
             {(hasActiveFilters || statusFilter !== "all") && statusFilteredRecords.length === 0 ? (
               <div className="empty-state-detail">
@@ -3573,7 +3696,16 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <p className="empty-state">暂无出土物坐标记录，请在上方表单录入</p>
             ) : (
               statusFilteredRecords.map((record: ArtifactRecord, index: number) => (
-                <article key={record.id} className={`record-card record-status-${record.status}`}>
+                <article key={record.id} className={`record-card record-status-${record.status} ${selectedRecordIds.has(record.id) ? 'record-selected' : ''}`}>
+                  {currentRole === "leader" && record.status === "pending" && (
+                    <div className="record-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedRecordIds.has(record.id)}
+                        onChange={() => handleToggleSelect(record.id)}
+                      />
+                    </div>
+                  )}
                   <div className="record-index artifact-index">{String(index + 1).padStart(2, "0")}</div>
                   <div className="record-content">
                     <div className="record-header">
@@ -4010,6 +4142,75 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               >
                 通过
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBatchReviewModal && (
+        <div className="review-modal-overlay batch-review-modal-overlay" onClick={() => setShowBatchReviewModal(false)}>
+          <div className="review-modal batch-review-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="review-modal-header">
+              <h3>
+                {batchReviewType === "approve" ? "批量通过" : "批量退回"}
+                <span className="batch-count">（共 {selectedRecordIds.size} 条记录）</span>
+              </h3>
+              <button 
+                className="modal-close-btn" 
+                onClick={() => {
+                  setShowBatchReviewModal(false);
+                  setBatchReviewReason("");
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="review-modal-body">
+              <div className="batch-review-summary">
+                <p><strong>操作类型：</strong>{batchReviewType === "approve" ? "批量通过" : "批量退回"}</p>
+                <p><strong>记录数量：</strong>{selectedRecordIds.size} 条待审核记录</p>
+                <p className="batch-review-hint">
+                  {batchReviewType === "approve" 
+                    ? "以下记录将被标记为已通过，并写入审核人和审核时间。" 
+                    : "以下记录将被标记为已退回，请填写统一的审核意见。"}
+                </p>
+              </div>
+              <label className="full-width">
+                <span>审核意见 {batchReviewType === "reject" && <span className="required">*</span>}</span>
+                <textarea
+                  placeholder={batchReviewType === "approve" ? "请输入审核意见（可选，默认：记录完整，审核通过）..." : "请输入统一审核意见..."}
+                  value={batchReviewReason}
+                  onChange={(e) => setBatchReviewReason(e.target.value)}
+                  rows={4}
+                />
+              </label>
+            </div>
+            <div className="review-modal-footer">
+              <button 
+                className="modal-cancel-btn"
+                onClick={() => {
+                  setShowBatchReviewModal(false);
+                  setBatchReviewReason("");
+                }}
+              >
+                取消
+              </button>
+              {batchReviewType === "reject" ? (
+                <button 
+                  className="modal-reject-btn"
+                  onClick={confirmBatchReject}
+                  disabled={!batchReviewReason.trim()}
+                >
+                  确认退回
+                </button>
+              ) : (
+                <button 
+                  className="modal-approve-btn"
+                  onClick={confirmBatchApprove}
+                >
+                  确认通过
+                </button>
+              )}
             </div>
           </div>
         </div>
