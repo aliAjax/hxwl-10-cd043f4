@@ -1385,6 +1385,14 @@ function App() {
     archived: artifactRecords.filter(r => r.status === "archived").length
   };
 
+  const filteredStatusCounts = {
+    all: filteredArtifactRecords.length,
+    pending: filteredArtifactRecords.filter(r => r.status === "pending").length,
+    approved: filteredArtifactRecords.filter(r => r.status === "approved").length,
+    rejected: filteredArtifactRecords.filter(r => r.status === "rejected").length,
+    archived: filteredArtifactRecords.filter(r => r.status === "archived").length
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -1433,31 +1441,31 @@ function App() {
               className={statusFilter === "all" ? "status-chip-active" : ""}
               onClick={() => setStatusFilter("all")}
             >
-              全部 ({statusCounts.all})
+              全部 ({hasActiveFilters ? filteredStatusCounts.all : statusCounts.all})
             </button>
             <button
               className={statusFilter === "pending" ? "status-chip-active status-pending" : "status-pending"}
               onClick={() => setStatusFilter("pending")}
             >
-              待审核 ({statusCounts.pending})
+              待审核 ({hasActiveFilters ? filteredStatusCounts.pending : statusCounts.pending})
             </button>
             <button
               className={statusFilter === "approved" ? "status-chip-active status-approved" : "status-approved"}
               onClick={() => setStatusFilter("approved")}
             >
-              已通过 ({statusCounts.approved})
+              已通过 ({hasActiveFilters ? filteredStatusCounts.approved : statusCounts.approved})
             </button>
             <button
               className={statusFilter === "rejected" ? "status-chip-active status-rejected" : "status-rejected"}
               onClick={() => setStatusFilter("rejected")}
             >
-              已退回 ({statusCounts.rejected})
+              已退回 ({hasActiveFilters ? filteredStatusCounts.rejected : statusCounts.rejected})
             </button>
             <button
               className={statusFilter === "archived" ? "status-chip-active status-archived" : "status-archived"}
               onClick={() => setStatusFilter("archived")}
             >
-              已归档 ({statusCounts.archived})
+              已归档 ({hasActiveFilters ? filteredStatusCounts.archived : statusCounts.archived})
             </button>
           </div>
           <h2>筛选</h2>
@@ -2062,15 +2070,15 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <h2>出土物坐标记录</h2>
             </div>
             <div>
-              {hasActiveFilters && <span className="filter-badge">筛选中</span>}
-              <div>共 {hasActiveFilters ? statusFilteredRecords.length : artifactRecords.length} 条</div>
+              {(hasActiveFilters || statusFilter !== "all") && <span className="filter-badge">筛选中</span>}
+              <div>共 {statusFilteredRecords.length} 条</div>
             </div>
           </div>
           <div className="record-list">
-            {hasActiveFilters && statusFilteredRecords.length === 0 ? (
+            {(hasActiveFilters || statusFilter !== "all") && statusFilteredRecords.length === 0 ? (
               <div className="empty-state-detail">
                 <p className="empty-state">暂无匹配的采集记录</p>
-                <p className="empty-state-hint">请尝试调整筛选条件，或点击"清除筛选"查看全部记录</p>
+                <p className="empty-state-hint">请尝试调整筛选条件，或清除筛选查看全部记录</p>
               </div>
             ) : artifactRecords.length === 0 ? (
               <p className="empty-state">暂无出土物坐标记录，请在上方表单录入</p>
@@ -2109,7 +2117,7 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                       </p>
                     )}
                     
-                    {record.reviewReason && (
+                    {record.reviewReason && record.status !== "archived" && (
                       <div className={`review-info review-${record.status}`}>
                         <strong>
                           {record.status === "approved" ? "✓ 审核通过" : "✕ 审核退回"}
@@ -2123,7 +2131,14 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                     {record.archivedBy && (
                       <div className="review-info review-archived">
                         <strong>📦 已归档 · {record.archivedBy}</strong>
-                        {record.archivedAt && <span className="review-time">{record.archivedAt}</span>}
+                        {record.reviewReason && (
+                          <p>
+                            ✓ 审核通过{record.reviewedBy && ` · ${record.reviewedBy}`}：
+                            {record.reviewReason}
+                            {record.reviewedAt && <span className="review-time"> · {record.reviewedAt}</span>}
+                          </p>
+                        )}
+                        {record.archivedAt && <span className="review-time">归档时间：{record.archivedAt}</span>}
                       </div>
                     )}
                     
