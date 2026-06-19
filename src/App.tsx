@@ -1342,15 +1342,15 @@ function App() {
   const defaultStratum = availableGridStrata.length > 0 ? availableGridStrata[0] : "";
   const actualStratumFilter = effectiveStratumFilter || defaultStratum;
 
-  const gridFilteredRecords: ValidatedArtifactRecord[] = validatedRecords.filter(r => {
+  const gridScopedRecords: ValidatedArtifactRecord[] = validatedRecords.filter(r => {
     const matchTrench = !actualTrenchFilter || r.trenchNumber === actualTrenchFilter;
     const matchStratum = !actualStratumFilter || r.stratum === actualStratumFilter;
-    const matchType = gridArtifactTypeFilter.has(r.artifactType);
-    return matchTrench && matchStratum && matchType;
+    return matchTrench && matchStratum;
   });
 
+  const gridFilteredRecords = gridScopedRecords.filter(r => gridArtifactTypeFilter.has(r.artifactType));
   const validGridPoints = gridFilteredRecords.filter(r => r.isCoordinateValid);
-  const invalidGridRecords = gridFilteredRecords.filter(r => !r.isCoordinateValid);
+  const invalidGridRecords = gridScopedRecords.filter(r => !r.isCoordinateValid);
 
   const gridMaxE = validGridPoints.length > 0
     ? Math.max(...validGridPoints.map(r => r.eValue!).filter(v => v !== null && !isNaN(v)), 5)
