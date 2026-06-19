@@ -373,4 +373,9 @@ export interface TraversalResult {
   allReachable: Set<string>;
 }
 
+export type ExceptionAction =
+  | { type: "missing_field"; recordId: number; trenchNumber: string; stratum: string; fieldName: string; fieldLabel: string; artifactType: string }
+  | { type: "pending_relation"; stratumA: string; stratumB: string; trenchNumber: string; relationId?: number }
+  | { type: "pending_archive"; recordId: number; trenchNumber: string; stratum: string; artifactType: string };
+
 export type GraphViewMode = "graph" | "hierarchy";

@@ -8,6 +8,7 @@ import {
   type PendingRelationItem,
   type PendingArchiveItem,
   type OverviewFilters,
+  type ExceptionAction,
 } from "./types";
 
 const roleNames: Record<UserRole, string> = {
@@ -44,6 +45,7 @@ interface ExcavationOverviewProps {
   onRoleChange: (role: UserRole) => void;
   onRecordClick?: (recordId: number) => void;
   onTrenchSelect?: (trenchNumber: string) => void;
+  onExceptionAction?: (action: ExceptionAction) => void;
 }
 
 function ProgressBar({ percent, size = "md" }: { percent: number; size?: "sm" | "md" | "lg" }) {
@@ -152,7 +154,7 @@ function MissingFieldItemView({
   onClick?: () => void;
 }) {
   return (
-    <article className="overview-item missing-field-item" onClick={onClick}>
+    <article className="overview-item missing-field-item clickable-action" onClick={onClick} title="点击跳转到记录补录区域">
       <div className="overview-item-icon missing-icon">📝</div>
       <div className="overview-item-content">
         <div className="overview-item-header">
@@ -170,6 +172,7 @@ function MissingFieldItemView({
           <span className="overview-item-time">提交时间：{item.submittedAt}</span>
         )}
       </div>
+      <span className="action-hint">→ 去补录</span>
     </article>
   );
 }
@@ -183,8 +186,9 @@ function PendingRelationItemView({
 }) {
   return (
     <article
-      className={`overview-item relation-item ${item.hasConflictingRelation ? "relation-conflict" : ""}`}
+      className={`overview-item relation-item clickable-action ${item.hasConflictingRelation ? "relation-conflict" : ""}`}
       onClick={onClick}
+      title="点击跳转到地层关系复核区域"
     >
       <div className={`overview-item-icon ${item.hasConflictingRelation ? "conflict-icon" : "relation-icon"}`}>
         {item.hasConflictingRelation ? "⚠️" : "🔗"}
@@ -205,6 +209,7 @@ function PendingRelationItemView({
           <span className="related-count">关联出土物：{item.relatedArtifactCount} 件</span>
         </div>
       </div>
+      <span className="action-hint">→ 去复核</span>
     </article>
   );
 }
@@ -217,7 +222,7 @@ function PendingArchiveItemView({
   onClick?: () => void;
 }) {
   return (
-    <article className="overview-item archive-item" onClick={onClick}>
+    <article className="overview-item archive-item clickable-action" onClick={onClick} title="点击跳转到归档操作区域">
       <div className="overview-item-icon archive-icon">📦</div>
       <div className="overview-item-content">
         <div className="overview-item-header">
@@ -236,6 +241,7 @@ function PendingArchiveItemView({
           {item.approvedAt && <span className="overview-item-time">{item.approvedAt}</span>}
         </div>
       </div>
+      <span className="action-hint">→ 去归档</span>
     </article>
   );
 }
@@ -415,6 +421,7 @@ export default function ExcavationOverview({
   onRoleChange,
   onRecordClick,
   onTrenchSelect,
+  onExceptionAction,
 }: ExcavationOverviewProps) {
   const [selectedTrench, setSelectedTrench] = useState<string>("");
   const [filters, setFilters] = useState<OverviewFilters>({
@@ -461,6 +468,40 @@ export default function ExcavationOverview({
   };
 
   const handleItemClick = (item: typeof filteredItems[0]) => {
+    if (onExceptionAction) {
+      if ("fieldName" in item) {
+        onExceptionAction({
+          type: "missing_field",
+          recordId: item.recordId,
+          trenchNumber: item.trenchNumber,
+          stratum: item.stratum,
+          fieldName: item.fieldName,
+          fieldLabel: item.fieldLabel,
+          artifactType: item.artifactType,
+        });
+        return;
+      }
+      if ("stratumA" in item && "stratumB" in item) {
+        onExceptionAction({
+          type: "pending_relation",
+          stratumA: item.stratumA,
+          stratumB: item.stratumB,
+          trenchNumber: item.trenchNumber,
+          relationId: item.relationId,
+        });
+        return;
+      }
+      if ("approvedAt" in item) {
+        onExceptionAction({
+          type: "pending_archive",
+          recordId: item.recordId,
+          trenchNumber: item.trenchNumber,
+          stratum: item.stratum,
+          artifactType: item.artifactType,
+        });
+        return;
+      }
+    }
     if (onRecordClick && "recordId" in item && item.recordId) {
       onRecordClick(item.recordId);
     }

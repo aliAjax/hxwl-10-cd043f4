@@ -43,6 +43,7 @@ import {
   type RoleBasedViewData,
   type OverviewFilters,
   batchImportHeaders,
+  type ExceptionAction,
 } from "./types";
 
 
@@ -1009,7 +1010,7 @@ const generateTrenchSummaries = (
     ).sort();
 
     const relicUnitNames = Array.from(
-      new Set(trenchRecords.map((r) => r.relicUnit).filter(Boolean))
+      new Set(trenchRecords.map((r) => r.relicUnit).filter((v): v is string => Boolean(v)))
     ).sort();
 
     const strata = strataNames.map((s) =>
@@ -1312,6 +1313,12 @@ function App() {
   const [draftFilterStratum, setDraftFilterStratum] = useState<string>("");
   const [draftFilterType, setDraftFilterType] = useState<string>("");
   const [draftFilterKeyword, setDraftFilterKeyword] = useState<string>("");
+  const [toastMessage, setToastMessage] = useState<string>("");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 4000);
+  };
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -2523,6 +2530,91 @@ function App() {
 
   const validSelectedCount = Array.from(selectedRecordIds).filter(id => visiblePendingIds.has(id)).length;
 
+  const handleOverviewExceptionAction = (action: ExceptionAction) => {
+    if (action.type === "missing_field") {
+      const record = artifactRecords.find(r => r.id === action.recordId);
+      if (!record) {
+        showToast(`未找到记录 #${action.recordId}，该记录可能已被删除或归档`);
+        return;
+      }
+      setCurrentRole("excavator");
+      setFormData({
+        trenchNumber: record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: record.relicUnit || "",
+        artifactType: record.artifactType,
+        eCoordinate: record.eCoordinate,
+        nCoordinate: record.nCoordinate,
+        depth: record.depth,
+        quantity: record.quantity || "",
+        remarks: record.remarks,
+      });
+      setFormErrors({});
+      if (record.status === "rejected") {
+        setStatusFilter("rejected");
+      }
+      setSearchFilters({
+        trenchNumber: record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: "",
+        artifactKeyword: "",
+      });
+      setCurrentDraftId(null);
+      setDraftName("");
+      setTimeout(() => {
+        const target = document.querySelector(".artifact-collection");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      showToast(`已定位到记录 #${action.recordId}，请补录「${action.fieldLabel}」字段`);
+    } else if (action.type === "pending_relation") {
+      setCurrentRole("leader");
+      setRelationFormData({
+        stratumA: action.stratumA,
+        stratumB: action.stratumB,
+        relationType: "",
+      });
+      setRelationFormErrors({});
+      setTimeout(() => {
+        const target = document.querySelector(".stratum-relation-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      showToast(`已定位到地层关系区域，请复核「${action.stratumA} ↔ ${action.stratumB}」`);
+    } else if (action.type === "pending_archive") {
+      const record = artifactRecords.find(r => r.id === action.recordId);
+      if (!record) {
+        showToast(`未找到记录 #${action.recordId}，该记录可能已被删除或归档`);
+        return;
+      }
+      setCurrentRole("archivist");
+      setStatusFilter("approved");
+      setSearchFilters({
+        trenchNumber: action.trenchNumber,
+        stratum: action.stratum,
+        relicUnit: "",
+        artifactKeyword: action.artifactType,
+      });
+      setTimeout(() => {
+        const target = document.querySelector(".records-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => {
+            const recordEl = document.querySelector(`[data-record-id="${action.recordId}"]`);
+            if (recordEl) {
+              recordEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              recordEl.classList.add("record-highlight-flash");
+              setTimeout(() => recordEl.classList.remove("record-highlight-flash"), 2000);
+            }
+          }, 500);
+        }
+      }, 100);
+      showToast(`已定位到记录 #${action.recordId}，请进行归档操作`);
+    }
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -2547,6 +2639,7 @@ function App() {
         overviewState={overviewState}
         currentRole={currentRole}
         onRoleChange={setCurrentRole}
+        onExceptionAction={handleOverviewExceptionAction}
       />
 
       <section className="workspace">
@@ -3729,7 +3822,7 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <p className="empty-state">暂无出土物坐标记录，请在上方表单录入</p>
             ) : (
               statusFilteredRecords.map((record: ArtifactRecord, index: number) => (
-                <article key={record.id} className={`record-card record-status-${record.status} ${selectedRecordIds.has(record.id) ? 'record-selected' : ''}`}>
+                <article key={record.id} className={`record-card record-status-${record.status} ${selectedRecordIds.has(record.id) ? 'record-selected' : ''}`} data-record-id={record.id}>
                   {currentRole === "leader" && record.status === "pending" && (
                     <div className="record-checkbox">
                       <input
@@ -4271,6 +4364,13 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
         excavationLogs={excavationLogs}
         currentRole={currentRole}
       />
+
+      {toastMessage && (
+        <div className="toast-notification" role="status" aria-live="polite">
+          <span className="toast-icon">ℹ️</span>
+          <span className="toast-text">{toastMessage}</span>
+        </div>
+      )}
     </main>
   );
 }
