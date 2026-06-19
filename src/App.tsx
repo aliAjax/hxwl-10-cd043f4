@@ -1577,9 +1577,7 @@ function App() {
   };
 
   const handleSelectAll = () => {
-    const pendingIds = statusFilteredRecords
-      .filter(r => r.status === "pending")
-      .map(r => r.id);
+    const pendingIds = visiblePendingRecords.map(r => r.id);
     const allSelected = pendingIds.every(id => selectedRecordIds.has(id));
     if (allSelected) {
       setSelectedRecordIds(prev => {
@@ -1610,8 +1608,11 @@ function App() {
 
   const confirmBatchApprove = () => {
     const now = new Date().toLocaleString("zh-CN");
+    const validIds = new Set(
+      Array.from(selectedRecordIds).filter(id => visiblePendingIds.has(id))
+    );
     setArtifactRecords(prev => prev.map(r => {
-      if (selectedRecordIds.has(r.id) && r.status === "pending") {
+      if (validIds.has(r.id)) {
         return {
           ...r,
           status: "approved",
@@ -1632,8 +1633,11 @@ function App() {
       return;
     }
     const now = new Date().toLocaleString("zh-CN");
+    const validIds = new Set(
+      Array.from(selectedRecordIds).filter(id => visiblePendingIds.has(id))
+    );
     setArtifactRecords(prev => prev.map(r => {
-      if (selectedRecordIds.has(r.id) && r.status === "pending") {
+      if (validIds.has(r.id)) {
         return {
           ...r,
           status: "rejected",
@@ -2489,6 +2493,34 @@ function App() {
     rejected: filteredArtifactRecords.filter(r => r.status === "rejected").length,
     archived: filteredArtifactRecords.filter(r => r.status === "archived").length
   };
+
+  const visiblePendingRecords = statusFilteredRecords.filter(r => r.status === "pending");
+  const visiblePendingIds = new Set(visiblePendingRecords.map(r => r.id));
+
+  useEffect(() => {
+    const currentFiltered = statusFilter === "all"
+      ? filterArtifactRecords(artifactRecords)
+      : filterArtifactRecords(artifactRecords).filter(r => r.status === statusFilter);
+    const currentVisiblePendingIds = new Set(
+      currentFiltered
+        .filter(r => r.status === "pending")
+        .map(r => r.id)
+    );
+    setSelectedRecordIds(prev => {
+      let changed = false;
+      const next = new Set<number>();
+      prev.forEach(id => {
+        if (currentVisiblePendingIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [statusFilter, artifactRecords, searchFilters]);
+
+  const validSelectedCount = Array.from(selectedRecordIds).filter(id => visiblePendingIds.has(id)).length;
 
   return (
     <main className="app-shell">
@@ -3658,28 +3690,28 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <label className="select-all-label">
                 <input
                   type="checkbox"
-                  checked={statusFilteredRecords.filter(r => r.status === "pending").length > 0 && 
-                    statusFilteredRecords.filter(r => r.status === "pending").every(r => selectedRecordIds.has(r.id))}
+                  checked={visiblePendingRecords.length > 0 && 
+                    visiblePendingRecords.every(r => selectedRecordIds.has(r.id))}
                   onChange={handleSelectAll}
-                  disabled={statusFilteredRecords.filter(r => r.status === "pending").length === 0}
+                  disabled={visiblePendingRecords.length === 0}
                 />
                 <span>全选待审核</span>
               </label>
               <div className="batch-action-buttons">
                 <span className="selected-count">
-                  已选 {selectedRecordIds.size} 条
+                  已选 {validSelectedCount} 条
                 </span>
                 <button
                   className="batch-action-btn batch-approve-btn"
                   onClick={handleBatchApprove}
-                  disabled={selectedRecordIds.size === 0}
+                  disabled={validSelectedCount === 0}
                 >
                   批量通过
                 </button>
                 <button
                   className="batch-action-btn batch-reject-btn"
                   onClick={handleBatchReject}
-                  disabled={selectedRecordIds.size === 0}
+                  disabled={validSelectedCount === 0}
                 >
                   批量退回
                 </button>
@@ -4153,7 +4185,7 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             <div className="review-modal-header">
               <h3>
                 {batchReviewType === "approve" ? "批量通过" : "批量退回"}
-                <span className="batch-count">（共 {selectedRecordIds.size} 条记录）</span>
+                <span className="batch-count">（共 {validSelectedCount} 条记录）</span>
               </h3>
               <button 
                 className="modal-close-btn" 
@@ -4168,7 +4200,7 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             <div className="review-modal-body">
               <div className="batch-review-summary">
                 <p><strong>操作类型：</strong>{batchReviewType === "approve" ? "批量通过" : "批量退回"}</p>
-                <p><strong>记录数量：</strong>{selectedRecordIds.size} 条待审核记录</p>
+                <p><strong>记录数量：</strong>{validSelectedCount} 条待审核记录</p>
                 <p className="batch-review-hint">
                   {batchReviewType === "approve" 
                     ? "以下记录将被标记为已通过，并写入审核人和审核时间。" 
