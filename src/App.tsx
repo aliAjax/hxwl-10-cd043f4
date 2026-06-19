@@ -1,6 +1,9 @@
 import { useState } from "react";
 import "./styles.css";
 
+type ReviewStatus = "pending" | "approved" | "rejected" | "archived";
+type UserRole = "excavator" | "leader" | "archivist";
+
 interface ArtifactRecord {
   id: number;
   trenchNumber: string;
@@ -13,6 +16,14 @@ interface ArtifactRecord {
   createdAt: string;
   relicUnit?: string;
   quantity?: string;
+  status: ReviewStatus;
+  submittedBy?: string;
+  submittedAt?: string;
+  reviewReason?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  archivedBy?: string;
+  archivedAt?: string;
 }
 
 interface ArtifactFormData {
@@ -197,6 +208,26 @@ const statusColors = ["status-ok", "status-watch", "status-danger"];
 
 const artifactTypes = ["陶片", "石器", "骨器", "青铜器", "瓷器", "铁器", "动植物遗存", "其他"];
 
+const roleNames: Record<UserRole, string> = {
+  excavator: "发掘队员",
+  leader: "领队",
+  archivist: "资料整理员"
+};
+
+const statusLabels: Record<ReviewStatus, string> = {
+  pending: "待审核",
+  approved: "已通过",
+  rejected: "已退回",
+  archived: "已归档"
+};
+
+const statusColorsMap: Record<ReviewStatus, string> = {
+  pending: "#f59e0b",
+  approved: "#047857",
+  rejected: "#e11d48",
+  archived: "#475569"
+};
+
 const weatherOptions = ["晴", "多云", "阴", "小雨", "中雨", "大雨", "小雪", "中雪", "雾", "霾"];
 
 const initialArtifactRecords: ArtifactRecord[] = [
@@ -210,7 +241,15 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.85m",
     remarks: "绳纹陶片，可辨器形有鬲口沿",
     createdAt: "2024/6/17 09:20:00",
-    quantity: "12"
+    quantity: "12",
+    status: "archived",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 09:20:00",
+    reviewReason: "记录完整，坐标准确",
+    reviewedBy: "领队-张建国",
+    reviewedAt: "2024/6/17 10:00:00",
+    archivedBy: "资料整理员-王小芳",
+    archivedAt: "2024/6/17 14:30:00"
   },
   {
     id: 1002,
@@ -222,7 +261,13 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.92m",
     remarks: "石斧残件，磨制精细",
     createdAt: "2024/6/17 09:45:00",
-    quantity: "1"
+    quantity: "1",
+    status: "approved",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 09:45:00",
+    reviewReason: "重要发现，记录完整",
+    reviewedBy: "领队-张建国",
+    reviewedAt: "2024/6/17 10:30:00"
   },
   {
     id: 1003,
@@ -234,7 +279,13 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.78m",
     remarks: "骨簪一枚，保存较好",
     createdAt: "2024/6/17 10:10:00",
-    quantity: "1"
+    quantity: "1",
+    status: "approved",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 10:10:00",
+    reviewReason: "器物完整，记录清晰",
+    reviewedBy: "领队-张建国",
+    reviewedAt: "2024/6/17 11:00:00"
   },
   {
     id: 1004,
@@ -246,7 +297,13 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.45m",
     remarks: "泥质灰陶，素面",
     createdAt: "2024/6/17 10:35:00",
-    quantity: "5"
+    quantity: "5",
+    status: "rejected",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 10:35:00",
+    reviewReason: "地层判断存疑，第2层应为明清堆积，请复核陶片年代",
+    reviewedBy: "领队-张建国",
+    reviewedAt: "2024/6/17 11:30:00"
   },
   {
     id: 1005,
@@ -258,7 +315,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.32m",
     remarks: "青花瓷片，明清时期",
     createdAt: "2024/6/17 11:00:00",
-    quantity: "2"
+    quantity: "2",
+    status: "pending",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 11:00:00"
   },
   {
     id: 1006,
@@ -271,7 +331,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "炭化粟粒，需浮选鉴定",
     createdAt: "2024/6/17 14:15:00",
     relicUnit: "H12",
-    quantity: "大量"
+    quantity: "大量",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 14:15:00"
   },
   {
     id: 1007,
@@ -284,7 +347,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "动物骨骼碎片，疑似猪骨",
     createdAt: "2024/6/17 14:40:00",
     relicUnit: "H12",
-    quantity: "8"
+    quantity: "8",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 14:40:00"
   },
   {
     id: 1008,
@@ -297,7 +363,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "夹砂褐陶，绳纹",
     createdAt: "2024/6/17 15:05:00",
     relicUnit: "H12",
-    quantity: "20"
+    quantity: "20",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 15:05:00"
   },
   {
     id: 1009,
@@ -309,7 +378,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.38m",
     remarks: "铁钉，锈蚀严重",
     createdAt: "2024/6/17 15:30:00",
-    quantity: "3"
+    quantity: "3",
+    status: "pending",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 15:30:00"
   },
   {
     id: 1010,
@@ -322,7 +394,13 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "缺少E坐标，坐标待补测",
     createdAt: "2024/6/17 16:00:00",
     relicUnit: "F2",
-    quantity: "4"
+    quantity: "4",
+    status: "rejected",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 16:00:00",
+    reviewReason: "坐标不完整，请补测E坐标后重新提交",
+    reviewedBy: "领队-张建国",
+    reviewedAt: "2024/6/17 16:40:00"
   },
   {
     id: 1011,
@@ -335,7 +413,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "N坐标格式错误",
     createdAt: "2024/6/17 16:20:00",
     relicUnit: "F2",
-    quantity: "1"
+    quantity: "1",
+    status: "pending",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 16:20:00"
   },
   {
     id: 1012,
@@ -347,7 +428,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.80m",
     remarks: "未记录坐标点",
     createdAt: "2024/6/17 16:45:00",
-    quantity: "1"
+    quantity: "1",
+    status: "pending",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 16:45:00"
   },
   {
     id: 1013,
@@ -359,7 +443,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.72m",
     remarks: "带E/N前缀的坐标（应正常识别）",
     createdAt: "2024/6/17 17:10:00",
-    quantity: "8"
+    quantity: "8",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 17:10:00"
   },
   {
     id: 1014,
@@ -371,7 +458,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.95m",
     remarks: "带m单位后缀的坐标（应正常识别）",
     createdAt: "2024/6/17 17:30:00",
-    quantity: "2"
+    quantity: "2",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 17:30:00"
   },
   {
     id: 1015,
@@ -383,7 +473,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.68m",
     remarks: "同时带E/N前缀和m单位后缀（应正常识别）",
     createdAt: "2024/6/17 17:50:00",
-    quantity: "1"
+    quantity: "1",
+    status: "pending",
+    submittedBy: "发掘队员-王小芳",
+    submittedAt: "2024/6/17 17:50:00"
   },
   {
     id: 1016,
@@ -396,7 +489,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "E坐标前缀X不是有效坐标标识（应标记异常）",
     createdAt: "2024/6/17 18:10:00",
     relicUnit: "F2",
-    quantity: "3"
+    quantity: "3",
+    status: "pending",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 18:10:00"
   },
   {
     id: 1017,
@@ -409,7 +505,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "N坐标前缀Y不是有效坐标标识（应标记异常）",
     createdAt: "2024/6/17 18:30:00",
     relicUnit: "F2",
-    quantity: "1"
+    quantity: "1",
+    status: "pending",
+    submittedBy: "发掘队员-赵伟",
+    submittedAt: "2024/6/17 18:30:00"
   },
   {
     id: 1018,
@@ -421,7 +520,10 @@ const initialArtifactRecords: ArtifactRecord[] = [
     depth: "0.30m",
     remarks: "E坐标后缀xyz不是有效单位（应标记异常）",
     createdAt: "2024/6/17 18:50:00",
-    quantity: "2"
+    quantity: "2",
+    status: "pending",
+    submittedBy: "发掘队员-李明",
+    submittedAt: "2024/6/17 18:50:00"
   }
 ];
 
@@ -565,6 +667,11 @@ const getArtifactTypeColor = (type: string): string => {
 };
 
 function App() {
+  const [currentRole, setCurrentRole] = useState<UserRole>("excavator");
+  const [reviewModalRecord, setReviewModalRecord] = useState<ArtifactRecord | null>(null);
+  const [reviewReason, setReviewReason] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<ReviewStatus | "all">("all");
+
   const [artifactRecords, setArtifactRecords] = useState<ArtifactRecord[]>(initialArtifactRecords);
   const [formData, setFormData] = useState<ArtifactFormData>({
     trenchNumber: "",
@@ -742,13 +849,88 @@ function App() {
     if (!validateForm()) {
       return;
     }
+    const now = new Date().toLocaleString("zh-CN");
     const newRecord: ArtifactRecord = {
       id: Date.now(),
       ...formData,
-      createdAt: new Date().toLocaleString("zh-CN")
+      createdAt: now,
+      status: "pending",
+      submittedBy: `${roleNames[currentRole]}-当前用户`,
+      submittedAt: now
     };
     setArtifactRecords(prev => [newRecord, ...prev]);
     handleClear();
+  };
+
+  const handleApprove = (id: number) => {
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (r.id === id && r.status === "pending") {
+        return {
+          ...r,
+          status: "approved",
+          reviewReason: reviewReason || "记录完整，审核通过",
+          reviewedBy: `${roleNames[currentRole]}-当前用户`,
+          reviewedAt: now
+        };
+      }
+      return r;
+    }));
+    setReviewModalRecord(null);
+    setReviewReason("");
+  };
+
+  const handleReject = (id: number) => {
+    if (!reviewReason.trim()) {
+      return;
+    }
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (r.id === id && r.status === "pending") {
+        return {
+          ...r,
+          status: "rejected",
+          reviewReason: reviewReason,
+          reviewedBy: `${roleNames[currentRole]}-当前用户`,
+          reviewedAt: now
+        };
+      }
+      return r;
+    }));
+    setReviewModalRecord(null);
+    setReviewReason("");
+  };
+
+  const handleArchive = (id: number) => {
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (r.id === id && r.status === "approved") {
+        return {
+          ...r,
+          status: "archived",
+          archivedBy: `${roleNames[currentRole]}-当前用户`,
+          archivedAt: now
+        };
+      }
+      return r;
+    }));
+  };
+
+  const handleResubmit = (id: number) => {
+    const now = new Date().toLocaleString("zh-CN");
+    setArtifactRecords(prev => prev.map(r => {
+      if (r.id === id && r.status === "rejected") {
+        return {
+          ...r,
+          status: "pending",
+          submittedAt: now,
+          reviewReason: undefined,
+          reviewedBy: undefined,
+          reviewedAt: undefined
+        };
+      }
+      return r;
+    }));
   };
 
   const handleClear = () => {
@@ -1138,7 +1320,10 @@ function App() {
         remarks: "",
         createdAt: now,
         relicUnit: row.relicUnit.trim() || undefined,
-        quantity: row.quantity.trim()
+        quantity: row.quantity.trim(),
+        status: "pending",
+        submittedBy: `${roleNames[currentRole]}-当前用户`,
+        submittedAt: now
       };
     });
     setArtifactRecords(prev => [...newRecords, ...prev]);
@@ -1188,6 +1373,18 @@ function App() {
   const filteredProjectRecords = filterProjectRecords(project.records);
   const filteredArtifactRecords = filterArtifactRecords(artifactRecords);
 
+  const statusFilteredRecords = statusFilter === "all" 
+    ? filteredArtifactRecords 
+    : filteredArtifactRecords.filter(r => r.status === statusFilter);
+
+  const statusCounts = {
+    all: artifactRecords.length,
+    pending: artifactRecords.filter(r => r.status === "pending").length,
+    approved: artifactRecords.filter(r => r.status === "approved").length,
+    rejected: artifactRecords.filter(r => r.status === "rejected").length,
+    archived: artifactRecords.filter(r => r.status === "archived").length
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -1210,11 +1407,58 @@ function App() {
 
       <section className="workspace">
         <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
+          <h2>角色切换</h2>
+          <div className="chips role-chips">
+            {(Object.entries(roleNames) as [UserRole, string][]).map(([role, name]) => (
+              <button
+                key={role}
+                className={currentRole === role ? "role-chip-active" : ""}
+                onClick={() => setCurrentRole(role)}
+              >
+                {name}
+              </button>
             ))}
+          </div>
+          <div className="current-role-info">
+            <p>当前角色：<strong>{roleNames[currentRole]}</strong></p>
+            <p className="role-desc">
+              {currentRole === "excavator" && "可提交新记录、重新提交被退回的记录"}
+              {currentRole === "leader" && "可审核待审核记录，决定通过或退回"}
+              {currentRole === "archivist" && "可将已通过的记录进行归档"}
+            </p>
+          </div>
+          <h2>审核状态筛选</h2>
+          <div className="chips status-filter-chips">
+            <button
+              className={statusFilter === "all" ? "status-chip-active" : ""}
+              onClick={() => setStatusFilter("all")}
+            >
+              全部 ({statusCounts.all})
+            </button>
+            <button
+              className={statusFilter === "pending" ? "status-chip-active status-pending" : "status-pending"}
+              onClick={() => setStatusFilter("pending")}
+            >
+              待审核 ({statusCounts.pending})
+            </button>
+            <button
+              className={statusFilter === "approved" ? "status-chip-active status-approved" : "status-approved"}
+              onClick={() => setStatusFilter("approved")}
+            >
+              已通过 ({statusCounts.approved})
+            </button>
+            <button
+              className={statusFilter === "rejected" ? "status-chip-active status-rejected" : "status-rejected"}
+              onClick={() => setStatusFilter("rejected")}
+            >
+              已退回 ({statusCounts.rejected})
+            </button>
+            <button
+              className={statusFilter === "archived" ? "status-chip-active status-archived" : "status-archived"}
+              onClick={() => setStatusFilter("archived")}
+            >
+              已归档 ({statusCounts.archived})
+            </button>
           </div>
           <h2>筛选</h2>
           <div className="chips muted">
@@ -1819,11 +2063,11 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             </div>
             <div>
               {hasActiveFilters && <span className="filter-badge">筛选中</span>}
-              <div>共 {hasActiveFilters ? filteredArtifactRecords.length : artifactRecords.length} 条</div>
+              <div>共 {hasActiveFilters ? statusFilteredRecords.length : artifactRecords.length} 条</div>
             </div>
           </div>
           <div className="record-list">
-            {hasActiveFilters && filteredArtifactRecords.length === 0 ? (
+            {hasActiveFilters && statusFilteredRecords.length === 0 ? (
               <div className="empty-state-detail">
                 <p className="empty-state">暂无匹配的采集记录</p>
                 <p className="empty-state-hint">请尝试调整筛选条件，或点击"清除筛选"查看全部记录</p>
@@ -1831,21 +2075,101 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             ) : artifactRecords.length === 0 ? (
               <p className="empty-state">暂无出土物坐标记录，请在上方表单录入</p>
             ) : (
-              filteredArtifactRecords.map((record: ArtifactRecord, index: number) => (
-                <article key={record.id} className="record-card">
+              statusFilteredRecords.map((record: ArtifactRecord, index: number) => (
+                <article key={record.id} className={`record-card record-status-${record.status}`}>
                   <div className="record-index artifact-index">{String(index + 1).padStart(2, "0")}</div>
-                  <div>
-                    <h3>
-                      {record.trenchNumber} · {record.artifactType}
-                      {record.quantity && <span className="qty-tag">×{record.quantity}</span>}
-                    </h3>
+                  <div className="record-content">
+                    <div className="record-header">
+                      <h3>
+                        {record.trenchNumber} · {record.artifactType}
+                        {record.quantity && <span className="qty-tag">×{record.quantity}</span>}
+                      </h3>
+                      <span 
+                        className="status-badge"
+                        style={{ 
+                          background: `${statusColorsMap[record.status]}15`,
+                          color: statusColorsMap[record.status],
+                          borderColor: `${statusColorsMap[record.status]}40`
+                        }}
+                      >
+                        {statusLabels[record.status]}
+                      </span>
+                    </div>
                     <p>
                       地层：{record.stratum}
                       {record.relicUnit && ` · 遗迹：${record.relicUnit}`}
                       {" · 坐标：E"}{record.eCoordinate} N{record.nCoordinate} · 深度：{record.depth}
                     </p>
                     {record.remarks && <p className="record-remarks">备注：{record.remarks}</p>}
-                    <p className="record-time">{record.createdAt}</p>
+                    
+                    {record.submittedBy && (
+                      <p className="record-meta">
+                        <span>提交人：{record.submittedBy}</span>
+                        <span>提交时间：{record.submittedAt}</span>
+                      </p>
+                    )}
+                    
+                    {record.reviewReason && (
+                      <div className={`review-info review-${record.status}`}>
+                        <strong>
+                          {record.status === "approved" ? "✓ 审核通过" : "✕ 审核退回"}
+                          {record.reviewedBy && ` · ${record.reviewedBy}`}
+                        </strong>
+                        <p>{record.reviewReason}</p>
+                        {record.reviewedAt && <span className="review-time">{record.reviewedAt}</span>}
+                      </div>
+                    )}
+                    
+                    {record.archivedBy && (
+                      <div className="review-info review-archived">
+                        <strong>📦 已归档 · {record.archivedBy}</strong>
+                        {record.archivedAt && <span className="review-time">{record.archivedAt}</span>}
+                      </div>
+                    )}
+                    
+                    <div className="record-actions">
+                      {currentRole === "leader" && record.status === "pending" && (
+                        <>
+                          <button 
+                            className="action-btn action-approve"
+                            onClick={() => {
+                              setReviewModalRecord(record);
+                              setReviewReason("");
+                            }}
+                          >
+                            通过
+                          </button>
+                          <button 
+                            className="action-btn action-reject"
+                            onClick={() => {
+                              setReviewModalRecord(record);
+                              setReviewReason("");
+                            }}
+                          >
+                            退回
+                          </button>
+                        </>
+                      )}
+                      {currentRole === "archivist" && record.status === "approved" && (
+                        <button 
+                          className="action-btn action-archive"
+                          onClick={() => handleArchive(record.id)}
+                        >
+                          归档
+                        </button>
+                      )}
+                      {currentRole === "excavator" && record.status === "rejected" && (
+                        <button 
+                          className="action-btn action-resubmit"
+                          onClick={() => handleResubmit(record.id)}
+                        >
+                          重新提交
+                        </button>
+                      )}
+                      {record.status === "archived" && (
+                        <span className="archived-label">已完成归档</span>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))
@@ -2113,6 +2437,73 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
           )}
         </div>
       </section>
+
+      {reviewModalRecord && (
+        <div className="review-modal-overlay" onClick={() => setReviewModalRecord(null)}>
+          <div className="review-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="review-modal-header">
+              <h3>审核记录 #{reviewModalRecord.id}</h3>
+              <button 
+                className="modal-close-btn" 
+                onClick={() => {
+                  setReviewModalRecord(null);
+                  setReviewReason("");
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="review-modal-body">
+              <div className="review-record-summary">
+                <p><strong>探方：</strong>{reviewModalRecord.trenchNumber}</p>
+                <p><strong>地层：</strong>{reviewModalRecord.stratum}</p>
+                <p><strong>类型：</strong>{reviewModalRecord.artifactType}</p>
+                <p><strong>坐标：</strong>E{reviewModalRecord.eCoordinate} N{reviewModalRecord.nCoordinate}</p>
+                <p><strong>深度：</strong>{reviewModalRecord.depth}</p>
+                {reviewModalRecord.remarks && (
+                  <p><strong>备注：</strong>{reviewModalRecord.remarks}</p>
+                )}
+                {reviewModalRecord.submittedBy && (
+                  <p><strong>提交人：</strong>{reviewModalRecord.submittedBy}</p>
+                )}
+              </div>
+              <label className="full-width">
+                <span>审核意见 <span className="required">*</span></span>
+                <textarea
+                  placeholder="请输入审核意见..."
+                  value={reviewReason}
+                  onChange={(e) => setReviewReason(e.target.value)}
+                  rows={4}
+                />
+              </label>
+            </div>
+            <div className="review-modal-footer">
+              <button 
+                className="modal-cancel-btn"
+                onClick={() => {
+                  setReviewModalRecord(null);
+                  setReviewReason("");
+                }}
+              >
+                取消
+              </button>
+              <button 
+                className="modal-reject-btn"
+                onClick={() => handleReject(reviewModalRecord.id)}
+                disabled={!reviewReason.trim()}
+              >
+                退回
+              </button>
+              <button 
+                className="modal-approve-btn"
+                onClick={() => handleApprove(reviewModalRecord.id)}
+              >
+                通过
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
