@@ -328,3 +328,49 @@ export interface OverviewFilters {
   severity: AnomalyRecord["severity"] | "all";
   status: ReviewStatus | "all";
 }
+
+// ============ 关系网络视图类型 ============
+
+export type ConflictKind =
+  | "duplicate"
+  | "mutual_breaks"
+  | "mutual_contains"
+  | "mutual_earlier"
+  | "breaks_vs_earlier";
+
+export interface RelationConflict {
+  kind: ConflictKind;
+  relationIds: number[];
+  message: string;
+}
+
+export interface GraphNode {
+  name: string;
+  artifactCount: number;
+  trenchNumber?: string;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: RelationType;
+  relationId: number;
+  conflicts: RelationConflict[];
+}
+
+export interface GraphPathStep {
+  from: string;
+  to: string;
+  type: RelationType;
+  relationId: number;
+  direction: "forward" | "inverse";
+}
+
+export interface TraversalResult {
+  direct: GraphPathStep[];
+  indirect: GraphPathStep[][];
+  allReachable: Set<string>;
+}
+
+export type GraphViewMode = "graph" | "hierarchy";

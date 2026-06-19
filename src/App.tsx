@@ -9,6 +9,7 @@ import {
 } from "./indexedDB";
 import ExportModule from "./export";
 import ExcavationOverview from "./ExcavationOverview";
+import StratumRelationGraphView from "./StratumRelationGraphView";
 import {
   type ReviewStatus,
   type UserRole,
@@ -4105,6 +4106,12 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
           )}
         </div>
       </section>
+
+      <StratumRelationGraphView
+        relations={stratumRelations}
+        artifactRecords={artifactRecords}
+        onDeleteRelation={handleDeleteRelation}
+      />
 
       {reviewModalRecord && (
         <div className="review-modal-overlay" onClick={() => setReviewModalRecord(null)}>
