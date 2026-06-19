@@ -348,6 +348,80 @@ const initialArtifactRecords: ArtifactRecord[] = [
     remarks: "未记录坐标点",
     createdAt: "2024/6/17 16:45:00",
     quantity: "1"
+  },
+  {
+    id: 1013,
+    trenchNumber: "T0204",
+    stratum: "第3层",
+    artifactType: "陶片",
+    eCoordinate: "E2.80",
+    nCoordinate: "N3.15",
+    depth: "0.72m",
+    remarks: "带E/N前缀的坐标（应正常识别）",
+    createdAt: "2024/6/17 17:10:00",
+    quantity: "8"
+  },
+  {
+    id: 1014,
+    trenchNumber: "T0204",
+    stratum: "第3层",
+    artifactType: "石器",
+    eCoordinate: "4.20m",
+    nCoordinate: "1.50m",
+    depth: "0.95m",
+    remarks: "带m单位后缀的坐标（应正常识别）",
+    createdAt: "2024/6/17 17:30:00",
+    quantity: "2"
+  },
+  {
+    id: 1015,
+    trenchNumber: "T0204",
+    stratum: "第3层",
+    artifactType: "骨器",
+    eCoordinate: "E0.85m",
+    nCoordinate: "N2.40m",
+    depth: "0.68m",
+    remarks: "同时带E/N前缀和m单位后缀（应正常识别）",
+    createdAt: "2024/6/17 17:50:00",
+    quantity: "1"
+  },
+  {
+    id: 1016,
+    trenchNumber: "T0301",
+    stratum: "F2房址",
+    artifactType: "陶片",
+    eCoordinate: "X3.50",
+    nCoordinate: "N2.10",
+    depth: "0.55m",
+    remarks: "E坐标前缀X不是有效坐标标识（应标记异常）",
+    createdAt: "2024/6/17 18:10:00",
+    relicUnit: "F2",
+    quantity: "3"
+  },
+  {
+    id: 1017,
+    trenchNumber: "T0301",
+    stratum: "F2房址",
+    artifactType: "瓷器",
+    eCoordinate: "E1.75",
+    nCoordinate: "Y4.20",
+    depth: "0.48m",
+    remarks: "N坐标前缀Y不是有效坐标标识（应标记异常）",
+    createdAt: "2024/6/17 18:30:00",
+    relicUnit: "F2",
+    quantity: "1"
+  },
+  {
+    id: 1018,
+    trenchNumber: "T0203",
+    stratum: "第2层",
+    artifactType: "铁器",
+    eCoordinate: "3.00xyz",
+    nCoordinate: "N3.50",
+    depth: "0.30m",
+    remarks: "E坐标后缀xyz不是有效单位（应标记异常）",
+    createdAt: "2024/6/17 18:50:00",
+    quantity: "2"
   }
 ];
 
@@ -396,8 +470,39 @@ function MetricCard({ label, value, index }: { label: string; value: string; ind
 
 const parseNumber = (value: string): number | null => {
   if (!value || value.trim() === "") return null;
-  const num = parseFloat(value);
+  const clean = value.trim();
+  const match = clean.match(/-?\d+(\.\d+)?/);
+  if (!match) return null;
+  const num = parseFloat(match[0]);
   return isNaN(num) ? null : num;
+};
+
+const COORD_PREFIXES = new Set(["e", "n", "w", "s", "东", "北", "西", "南"]);
+const COORD_SUFFIXES = new Set(["m", "cm", "mm", "米", "厘米", "毫米"]);
+
+const isValidCoordinateFormat = (value: string): { valid: boolean; extracted: number | null; reason?: string } => {
+  if (!value || value.trim() === "") {
+    return { valid: false, extracted: null, reason: "坐标为空" };
+  }
+  const clean = value.trim();
+  const numMatch = clean.match(/-?\d+(\.\d+)?/);
+  if (!numMatch) {
+    return { valid: false, extracted: null, reason: "未找到有效数字" };
+  }
+  const numStr = numMatch[0];
+  const num = parseFloat(numStr);
+  const numStart = numMatch.index || 0;
+  const numEnd = numStart + numStr.length;
+  const prefix = clean.slice(0, numStart).trim().toLowerCase();
+  const suffix = clean.slice(numEnd).trim().toLowerCase();
+
+  if (prefix && !COORD_PREFIXES.has(prefix)) {
+    return { valid: false, extracted: num, reason: `前缀"${prefix}"不是有效的坐标标识` };
+  }
+  if (suffix && !COORD_SUFFIXES.has(suffix)) {
+    return { valid: false, extracted: num, reason: `后缀"${suffix}"不是有效的单位标识` };
+  }
+  return { valid: true, extracted: num };
 };
 
 interface ValidatedArtifactRecord extends ArtifactRecord {
@@ -408,21 +513,35 @@ interface ValidatedArtifactRecord extends ArtifactRecord {
 }
 
 const validateRecordCoordinates = (record: ArtifactRecord): ValidatedArtifactRecord => {
-  const eValue = parseNumber(record.eCoordinate);
-  const nValue = parseNumber(record.nCoordinate);
+  const eCheck = isValidCoordinateFormat(record.eCoordinate);
+  const nCheck = isValidCoordinateFormat(record.nCoordinate);
+  const eValue = eCheck.extracted;
+  const nValue = nCheck.extracted;
   let isCoordinateValid = true;
   let coordinateError: string | undefined;
 
-  if (eValue === null && nValue === null) {
+  const eEmpty = !record.eCoordinate || record.eCoordinate.trim() === "";
+  const nEmpty = !record.nCoordinate || record.nCoordinate.trim() === "";
+
+  if (eEmpty && nEmpty) {
     isCoordinateValid = false;
     coordinateError = "E和N坐标均为空";
-  } else if (eValue === null) {
+  } else if (eEmpty) {
     isCoordinateValid = false;
-    coordinateError = "E坐标为空或格式错误";
-  } else if (nValue === null) {
+    coordinateError = "E坐标为空";
+  } else if (nEmpty) {
     isCoordinateValid = false;
-    coordinateError = "N坐标为空或格式错误";
-  } else if (eValue < 0 || nValue < 0) {
+    coordinateError = "N坐标为空";
+  } else if (!eCheck.valid && !nCheck.valid) {
+    isCoordinateValid = false;
+    coordinateError = `E坐标${eCheck.reason}，N坐标${nCheck.reason}`;
+  } else if (!eCheck.valid) {
+    isCoordinateValid = false;
+    coordinateError = `E坐标${eCheck.reason}`;
+  } else if (!nCheck.valid) {
+    isCoordinateValid = false;
+    coordinateError = `N坐标${nCheck.reason}`;
+  } else if (eValue !== null && nValue !== null && (eValue < 0 || nValue < 0)) {
     isCoordinateValid = false;
     coordinateError = "坐标不能为负数";
   }
