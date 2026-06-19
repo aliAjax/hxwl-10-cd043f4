@@ -22,6 +22,10 @@ export type {
   ProjectMetrics,
   TrenchSummary,
   DataCollectionInput,
+  RepairChecklistAction,
+  RepairChecklistGroup,
+  RepairChecklistCategoryGroup,
+  RepairChecklistTrenchGroup,
 } from "./types";
 
 // —— 一致性检查引擎 ——

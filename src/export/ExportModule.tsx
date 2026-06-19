@@ -13,6 +13,9 @@ import type {
   ExportOptions,
   ExportModuleProps,
   UserRole,
+  RepairChecklistAction,
+  RepairChecklistTrenchGroup,
+  IssueCategory,
 } from "./types";
 
 const categoryLabels: Record<string, string> = {
@@ -25,6 +28,24 @@ const categoryLabels: Record<string, string> = {
   rejected_record: "已退回记录",
   orphan_stratum: "孤立地层（无关系）",
 };
+
+const categoryAffectedRoles: Record<IssueCategory, UserRole[]> = {
+  missing_trench_number: ["excavator"],
+  empty_trench_number: ["excavator"],
+  invalid_coordinate: ["excavator"],
+  stratum_relation_conflict: ["leader"],
+  duplicate_relation: ["leader"],
+  unreviewed_record: ["leader"],
+  rejected_record: ["excavator"],
+  orphan_stratum: ["leader", "archivist"],
+};
+
+const jumpableCategories: Set<IssueCategory> = new Set([
+  "invalid_coordinate",
+  "missing_trench_number",
+  "unreviewed_record",
+  "duplicate_relation",
+]);
 
 
 
@@ -97,6 +118,111 @@ export default function ExportModule(props: ExportModuleProps) {
   const warningIssues = useMemo<ConsistencyIssue[]>(
     () => report?.issues.filter((i) => i.severity === "warning") || [],
     [report]
+  );
+
+  const repairChecklistData = useMemo<RepairChecklistTrenchGroup[]>(() => {
+    if (!report || report.issues.length === 0) return [];
+    const allIssues = report.issues.filter(
+      (i) => i.severity === "blocking" || i.severity === "warning"
+    );
+    const trenchMap = new Map<string, ConsistencyIssue[]>();
+    allIssues.forEach((issue) => {
+      const key = issue.trenchNumber?.trim() || issue.stratumName || "（未关联探方）";
+      if (!trenchMap.has(key)) trenchMap.set(key, []);
+      trenchMap.get(key)!.push(issue);
+    });
+    const groups: RepairChecklistTrenchGroup[] = [];
+    trenchMap.forEach((issues, trenchKey) => {
+      const catMap = new Map<IssueCategory, ConsistencyIssue[]>();
+      issues.forEach((issue) => {
+        if (!catMap.has(issue.category)) catMap.set(issue.category, []);
+        catMap.get(issue.category)!.push(issue);
+      });
+      const categories = Array.from(catMap.entries()).map(([cat, catIssues]) => ({
+        category: cat,
+        categoryLabel: categoryLabels[cat] || cat,
+        affectedRoles: categoryAffectedRoles[cat] || [],
+        issues: catIssues,
+      }));
+      categories.sort((a, b) => {
+        const aBlocking = a.issues.some((i) => i.severity === "blocking") ? 0 : 1;
+        const bBlocking = b.issues.some((i) => i.severity === "blocking") ? 0 : 1;
+        if (aBlocking !== bBlocking) return aBlocking - bBlocking;
+        return a.category.localeCompare(b.category);
+      });
+      groups.push({
+        trenchKey,
+        categories,
+        totalIssues: issues.length,
+      });
+    });
+    groups.sort((a, b) => {
+      const aBlocking = a.categories.some((c) =>
+        c.issues.some((i) => i.severity === "blocking")
+      )
+        ? 0
+        : 1;
+      const bBlocking = b.categories.some((c) =>
+        c.issues.some((i) => i.severity === "blocking")
+      )
+        ? 0
+        : 1;
+      if (aBlocking !== bBlocking) return aBlocking - bBlocking;
+      return a.trenchKey.localeCompare(b.trenchKey, "zh-CN");
+    });
+    return groups;
+  }, [report]);
+
+  const handleJumpToFix = useCallback(
+    (issue: ConsistencyIssue) => {
+      if (!props.onJumpToFix) return;
+      let action: RepairChecklistAction | null = null;
+      switch (issue.category) {
+        case "invalid_coordinate":
+          if (issue.recordId !== undefined) {
+            action = {
+              type: "fix_coordinate",
+              recordId: issue.recordId,
+              trenchNumber: issue.trenchNumber,
+            };
+          }
+          break;
+        case "missing_trench_number":
+          if (issue.recordId !== undefined) {
+            action = {
+              type: "fix_trench_number",
+              recordId: issue.recordId,
+            };
+          }
+          break;
+        case "unreviewed_record":
+          if (issue.recordId !== undefined) {
+            action = {
+              type: "review_record",
+              recordId: issue.recordId,
+              trenchNumber: issue.trenchNumber,
+            };
+          }
+          break;
+        case "duplicate_relation": {
+          const details = issue.details as
+            | { relation1?: { id?: number }; relation2?: { id?: number } }
+            | undefined;
+          action = {
+            type: "fix_duplicate_relation",
+            stratumA: issue.stratumName || "",
+            stratumB:
+              (details?.relation2 as Record<string, string> | undefined)?.stratumB ||
+              (details?.relation1 as Record<string, string> | undefined)?.stratumB ||
+              "",
+            relationId: details?.relation1?.id,
+          };
+          break;
+        }
+      }
+      if (action) props.onJumpToFix(action);
+    },
+    [props]
   );
 
   const buildDataPackage = useCallback((): ExportDataPackage | null => {
@@ -441,6 +567,80 @@ export default function ExportModule(props: ExportModuleProps) {
               )}
             </div>
           </div>
+
+          {(report.blockingCount > 0 || report.warningCount > 0) && repairChecklistData.length > 0 && (
+            <div className="repair-checklist-section">
+              <div className="repair-checklist-header">
+                <h3>📋 导出前修复清单</h3>
+                <span className="repair-checklist-hint">
+                  按探方、问题类型、影响角色分组，点击「去处理」可跳转到对应区域修复
+                </span>
+              </div>
+              <div className="repair-checklist-groups">
+                {repairChecklistData.map((trenchGroup) => (
+                  <div key={trenchGroup.trenchKey} className="repair-trench-group">
+                    <div className="repair-trench-header">
+                      <span className="repair-trench-label">
+                        🏗️ 探方：{trenchGroup.trenchKey}
+                      </span>
+                      <span className="repair-trench-count">
+                        {trenchGroup.totalIssues} 项问题
+                      </span>
+                    </div>
+                    {trenchGroup.categories.map((catGroup) => (
+                      <div key={catGroup.category} className="repair-category-block">
+                        <div className="repair-category-header">
+                          <span
+                            className={`repair-category-tag ${
+                              catGroup.issues.some((i) => i.severity === "blocking")
+                                ? "repair-tag-blocking"
+                                : "repair-tag-warning"
+                            }`}
+                          >
+                            {catGroup.categoryLabel}
+                          </span>
+                          <span className="repair-category-count">
+                            {catGroup.issues.length} 条
+                          </span>
+                          <div className="repair-affected-roles">
+                            {catGroup.affectedRoles.map((role) => (
+                              <span key={role} className={`repair-role-chip repair-role-${role}`}>
+                                {roleNamesLocal[role]}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <ul className="repair-issue-list">
+                          {catGroup.issues.map((issue) => (
+                            <li key={issue.id} className="repair-issue-item">
+                              <div className="repair-issue-content">
+                                <span
+                                  className={`repair-severity-dot ${
+                                    issue.severity === "blocking"
+                                      ? "repair-dot-blocking"
+                                      : "repair-dot-warning"
+                                  }`}
+                                />
+                                <span className="repair-issue-msg">{issue.message}</span>
+                              </div>
+                              {jumpableCategories.has(issue.category) && props.onJumpToFix && (
+                                <button
+                                  className="repair-jump-btn"
+                                  onClick={() => handleJumpToFix(issue)}
+                                >
+                                  去处理 →
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="issue-lists-wrap">
             {blockingIssues.length > 0 && (

@@ -2631,6 +2631,144 @@ function App() {
     }
   };
 
+  const handleExportJumpToFix = (action: import("./export/types").RepairChecklistAction) => {
+    if (action.type === "fix_coordinate") {
+      const record = artifactRecords.find(r => r.id === action.recordId);
+      if (!record) {
+        showToast(`未找到记录 #${action.recordId}，该记录可能已被删除或归档`);
+        return;
+      }
+      setCurrentRole("excavator");
+      setFormData({
+        trenchNumber: record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: record.relicUnit || "",
+        artifactType: record.artifactType,
+        eCoordinate: record.eCoordinate,
+        nCoordinate: record.nCoordinate,
+        depth: record.depth,
+        quantity: record.quantity || "",
+        remarks: record.remarks,
+      });
+      setFormErrors({});
+      if (record.status === "pending" || record.status === "rejected") {
+        setStatusFilter(record.status);
+      } else {
+        setStatusFilter("all");
+      }
+      setSearchFilters({
+        trenchNumber: action.trenchNumber || record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: "",
+        artifactKeyword: "",
+      });
+      setCurrentDraftId(null);
+      setDraftName("");
+      setTimeout(() => {
+        const target = document.querySelector(".records-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => {
+            const recordEl = document.querySelector(`[data-record-id="${action.recordId}"]`);
+            if (recordEl) {
+              recordEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              recordEl.classList.add("record-highlight-flash");
+              setTimeout(() => recordEl.classList.remove("record-highlight-flash"), 2000);
+            }
+          }, 500);
+        }
+      }, 100);
+      showToast(`已定位到记录 #${action.recordId}，请修复坐标信息`);
+    } else if (action.type === "fix_trench_number") {
+      const record = artifactRecords.find(r => r.id === action.recordId);
+      if (!record) {
+        showToast(`未找到记录 #${action.recordId}，该记录可能已被删除或归档`);
+        return;
+      }
+      setCurrentRole("excavator");
+      setFormData({
+        trenchNumber: record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: record.relicUnit || "",
+        artifactType: record.artifactType,
+        eCoordinate: record.eCoordinate,
+        nCoordinate: record.nCoordinate,
+        depth: record.depth,
+        quantity: record.quantity || "",
+        remarks: record.remarks,
+      });
+      setFormErrors({});
+      setStatusFilter("all");
+      setSearchFilters({
+        trenchNumber: "",
+        stratum: "",
+        relicUnit: "",
+        artifactKeyword: "",
+      });
+      setCurrentDraftId(null);
+      setDraftName("");
+      setTimeout(() => {
+        const target = document.querySelector(".records-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => {
+            const recordEl = document.querySelector(`[data-record-id="${action.recordId}"]`);
+            if (recordEl) {
+              recordEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              recordEl.classList.add("record-highlight-flash");
+              setTimeout(() => recordEl.classList.remove("record-highlight-flash"), 2000);
+            }
+          }, 500);
+        }
+      }, 100);
+      showToast(`已定位到记录 #${action.recordId}，请补充探方编号`);
+    } else if (action.type === "review_record") {
+      const record = artifactRecords.find(r => r.id === action.recordId);
+      if (!record) {
+        showToast(`未找到记录 #${action.recordId}，该记录可能已被删除或归档`);
+        return;
+      }
+      setCurrentRole("leader");
+      setStatusFilter("pending");
+      setSearchFilters({
+        trenchNumber: action.trenchNumber || record.trenchNumber,
+        stratum: record.stratum,
+        relicUnit: "",
+        artifactKeyword: "",
+      });
+      setTimeout(() => {
+        const target = document.querySelector(".records-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => {
+            const recordEl = document.querySelector(`[data-record-id="${action.recordId}"]`);
+            if (recordEl) {
+              recordEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              recordEl.classList.add("record-highlight-flash");
+              setTimeout(() => recordEl.classList.remove("record-highlight-flash"), 2000);
+            }
+          }, 500);
+        }
+      }, 100);
+      showToast(`已定位到待审核记录 #${action.recordId}，请进行审核操作`);
+    } else if (action.type === "fix_duplicate_relation") {
+      setCurrentRole("leader");
+      setRelationFormData({
+        stratumA: action.stratumA,
+        stratumB: action.stratumB,
+        relationType: "",
+      });
+      setRelationFormErrors({});
+      setTimeout(() => {
+        const target = document.querySelector(".stratum-relation-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      showToast(`已定位到地层关系区域，请复核「${action.stratumA} ↔ ${action.stratumB}」的重复关系`);
+    }
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -4379,6 +4517,7 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
         stratumRelations={stratumRelations}
         excavationLogs={excavationLogs}
         currentRole={currentRole}
+        onJumpToFix={handleExportJumpToFix}
       />
 
       {toastMessage && (

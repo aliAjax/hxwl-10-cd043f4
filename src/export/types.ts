@@ -114,6 +114,30 @@ export interface DataCollectionInput {
   currentUser?: string;
 }
 
+export type RepairChecklistAction =
+  | { type: "fix_coordinate"; recordId: number; trenchNumber?: string }
+  | { type: "fix_trench_number"; recordId: number }
+  | { type: "review_record"; recordId: number; trenchNumber?: string }
+  | { type: "fix_duplicate_relation"; stratumA: string; stratumB: string; relationId?: number };
+
+export interface RepairChecklistGroup {
+  trenchKey: string;
+  issues: ConsistencyIssue[];
+}
+
+export interface RepairChecklistCategoryGroup {
+  category: IssueCategory;
+  categoryLabel: string;
+  affectedRoles: UserRole[];
+  issues: ConsistencyIssue[];
+}
+
+export interface RepairChecklistTrenchGroup {
+  trenchKey: string;
+  categories: RepairChecklistCategoryGroup[];
+  totalIssues: number;
+}
+
 // ============================================================
 // 入站类型边界：ExportModule 组件 Props
 // ============================================================
@@ -134,4 +158,5 @@ export interface ExportModuleProps {
   excavationLogs: ExcavationLog[];
   currentRole: UserRole;
   currentRoleLabel?: string;
+  onJumpToFix?: (action: RepairChecklistAction) => void;
 }
