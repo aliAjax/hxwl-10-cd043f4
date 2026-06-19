@@ -1671,6 +1671,34 @@ function App() {
     }
   };
 
+  const handleSaveAsNewDraft = (draft: DraftRecord) => {
+    setFormData({
+      trenchNumber: draft.trenchNumber,
+      stratum: draft.stratum,
+      relicUnit: draft.relicUnit || "",
+      artifactType: draft.artifactType,
+      eCoordinate: draft.eCoordinate,
+      nCoordinate: draft.nCoordinate,
+      depth: draft.depth,
+      quantity: draft.quantity || "",
+      remarks: draft.remarks,
+    });
+    setCurrentDraftId(null);
+    setFormErrors({});
+    setShowDraftBox(false);
+
+    const defaultName = draft.trenchNumber
+      ? `${draft.trenchNumber}-${new Date().toLocaleDateString("zh-CN")}-副本`
+      : `草稿-${new Date().toLocaleDateString("zh-CN")}-副本`;
+    setDraftName(defaultName);
+    setShowSaveDraftModal(true);
+
+    const artifactSection = document.querySelector(".artifact-collection");
+    if (artifactSection) {
+      artifactSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const handleDeleteDraft = async (id: number) => {
     if (!indexedDBSupported) return;
     try {
@@ -2600,10 +2628,7 @@ function App() {
                           </button>
                           <button 
                             className="action-btn action-new-from"
-                            onClick={() => {
-                              handleRestoreDraft(draft);
-                              handleNewFromDraft();
-                            }}
+                            onClick={() => handleSaveAsNewDraft(draft)}
                           >
                             ✨ 另存为新记录
                           </button>
