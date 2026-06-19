@@ -17,6 +17,7 @@ import type {
   DataCollectionInput,
   ExportDataPackage,
   ExportOptions,
+  ExportModuleProps,
 } from "./types";
 
 const categoryLabels: Record<string, string> = {
@@ -30,23 +31,7 @@ const categoryLabels: Record<string, string> = {
   orphan_stratum: "孤立地层（无关系）",
 };
 
-interface ExportModuleProps {
-  project: {
-    id: string;
-    title: string;
-    subtitle: string;
-    domain: string;
-    metrics: string[];
-    filters: string[];
-  };
-  searchFilters: SearchFilters;
-  hasActiveFilters: boolean;
-  artifactRecords: ArtifactRecord[];
-  stratumRelations: StratumRelation[];
-  excavationLogs: ExcavationLog[];
-  currentRole: UserRole;
-  currentRoleLabel?: string;
-}
+
 
 type CheckStatus = "idle" | "checking" | "checked";
 type ExportStatus = "idle" | "exporting" | "success" | "error";
@@ -127,42 +112,64 @@ export default function ExportModule(props: ExportModuleProps) {
     });
   }, [buildCollectionInput, exportOptions]);
 
-  const handleExportJson = useCallback(() => {
-    setExportStatus("exporting");
-    setExportResultInfo({});
+  const performDownload = useCallback(
+    (bypassBlocking: boolean = false) => {
+      setExportStatus("exporting");
+      setExportResultInfo({});
 
-    setTimeout(() => {
-      try {
-        const dataPackage = buildDataPackage();
-        if (!dataPackage) {
+      setTimeout(() => {
+        try {
+          const dataPackage = buildDataPackage();
+          if (!dataPackage) {
+            setExportStatus("error");
+            setExportResultInfo({ error: "资料包构建失败" });
+            return;
+          }
+
+          if (!bypassBlocking && dataPackage.consistencyReport.blockingCount > 0) {
+            setExportStatus("error");
+            setExportResultInfo({
+              error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，已阻止下载。请修复后重试，或使用「强制导出」。`,
+            });
+            return;
+          }
+
+          const result = downloadJsonFile(dataPackage, { ...exportOptions, requireConsistencyPass: !bypassBlocking });
+          if (result.success) {
+            setExportStatus("success");
+            setExportResultInfo({
+              fileName: result.fileName,
+              fileSize: formatFileSize(result.sizeBytes),
+            });
+          } else {
+            setExportStatus("error");
+            setExportResultInfo({ error: result.error || "下载失败" });
+          }
+        } catch (err) {
           setExportStatus("error");
-          setExportResultInfo({ error: "资料包构建失败" });
-          return;
-        }
-
-        const result = downloadJsonFile(dataPackage, exportOptions);
-        if (result.success) {
-          setExportStatus("success");
           setExportResultInfo({
-            fileName: result.fileName,
-            fileSize: formatFileSize(result.sizeBytes),
+            error: err instanceof Error ? err.message : "导出过程发生未知错误",
           });
-        } else {
-          setExportStatus("error");
-          setExportResultInfo({ error: result.error || "下载失败" });
         }
-      } catch (err) {
-        setExportStatus("error");
-        setExportResultInfo({
-          error: err instanceof Error ? err.message : "导出过程发生未知错误",
-        });
-      }
-    }, 300);
-  }, [buildDataPackage, exportOptions]);
+      }, 300);
+    },
+    [buildDataPackage, exportOptions]
+  );
+
+  const handleExportJson = useCallback(() => {
+    if (report && report.blockingCount > 0) {
+      setExportStatus("error");
+      setExportResultInfo({
+        error: `存在 ${report.blockingCount} 项阻断问题，禁止导出资料包。请先修复所有阻断项后再试。`,
+      });
+      return;
+    }
+    performDownload(false);
+  }, [performDownload, report]);
 
   const handleForceExport = useCallback(() => {
-    handleExportJson();
-  }, [handleExportJson]);
+    performDownload(true);
+  }, [performDownload]);
 
   const handleTestBackendUpload = useCallback(async () => {
     setApiTestResult("正在调用后端上传接口（模拟）...");

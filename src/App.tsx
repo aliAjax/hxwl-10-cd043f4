@@ -8,7 +8,7 @@ import {
   deleteDraft as deleteDraftFromDB,
   clearAllDrafts as clearAllDraftsFromDB,
 } from "./indexedDB";
-import ExportModule from "./export/ExportModule";
+import ExportModule from "./export";
 
 type ReviewStatus = "pending" | "approved" | "rejected" | "archived";
 type UserRole = "excavator" | "leader" | "archivist";

@@ -98,3 +98,29 @@ export interface DataCollectionInput {
   currentRole?: string;
   currentUser?: string;
 }
+
+// ============================================================
+// 入站类型边界：ExportModule 组件 Props
+// ============================================================
+// 外部调用方（如 App.tsx）需要提供这些数据。
+// 导出模块内部的其他函数不应直接依赖此类型，
+// 而应使用 DataCollectionInput 等内部类型。
+// ============================================================
+
+export interface ExportModuleProps {
+  project: {
+    id: string;
+    title: string;
+    subtitle: string;
+    domain: string;
+    metrics: string[];
+    filters: string[];
+  };
+  searchFilters: import("../App").SearchFilters;
+  hasActiveFilters: boolean;
+  artifactRecords: import("../App").ArtifactRecord[];
+  stratumRelations: import("../App").StratumRelation[];
+  excavationLogs: import("../App").ExcavationLog[];
+  currentRole: import("../App").UserRole;
+  currentRoleLabel?: string;
+}

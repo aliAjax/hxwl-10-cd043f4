@@ -14,9 +14,18 @@ export const serializeDataPackage = (data: ExportDataPackage): string => {
 
 export const downloadJsonFile = (
   dataPackage: ExportDataPackage,
-  options?: ExportOptions
+  options?: ExportOptions & { requireConsistencyPass?: boolean }
 ): { success: boolean; fileName: string; sizeBytes: number; error?: string } => {
   try {
+    if (options?.requireConsistencyPass && dataPackage.consistencyReport.blockingCount > 0) {
+      return {
+        success: false,
+        fileName: options?.fileName || "archaeology_data_package.json",
+        sizeBytes: 0,
+        error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，一致性检查未通过，禁止导出。`,
+      };
+    }
+
     const fileName = options?.fileName || generateDefaultFileName(dataPackage.projectInfo.id);
     const jsonStr = serializeDataPackage(dataPackage);
     const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
