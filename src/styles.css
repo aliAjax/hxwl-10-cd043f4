@@ -1185,16 +1185,56 @@ button:disabled {
 
 .grid-legend {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
   margin-left: auto;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-width: 280px;
+}
+
+.legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .legend-label {
   color: #64748b;
   font-size: 13px;
   font-weight: 500;
+}
+
+.legend-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.legend-action-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.legend-action-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .legend-item {
@@ -1204,6 +1244,30 @@ button:disabled {
   font-size: 12px;
   color: #475569;
   font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.legend-item:hover {
+  background: #e2e8f0;
+}
+
+.legend-item.selected {
+  opacity: 1;
+}
+
+.legend-item.deselected {
+  opacity: 0.5;
+}
+
+.legend-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #854d0e;
 }
 
 .legend-dot {

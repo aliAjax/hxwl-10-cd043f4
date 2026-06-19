@@ -1267,6 +1267,7 @@ function App() {
 
   const [gridTrenchFilter, setGridTrenchFilter] = useState<string>("");
   const [gridStratumFilter, setGridStratumFilter] = useState<string>("");
+  const [gridArtifactTypeFilter, setGridArtifactTypeFilter] = useState<Set<string>>(new Set(artifactTypes));
   const [hoveredPoint, setHoveredPoint] = useState<ValidatedArtifactRecord | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [logFormData, setLogFormData] = useState<ExcavationLogFormData>({
@@ -1344,7 +1345,8 @@ function App() {
   const gridFilteredRecords: ValidatedArtifactRecord[] = validatedRecords.filter(r => {
     const matchTrench = !actualTrenchFilter || r.trenchNumber === actualTrenchFilter;
     const matchStratum = !actualStratumFilter || r.stratum === actualStratumFilter;
-    return matchTrench && matchStratum;
+    const matchType = gridArtifactTypeFilter.has(r.artifactType);
+    return matchTrench && matchStratum && matchType;
   });
 
   const validGridPoints = gridFilteredRecords.filter(r => r.isCoordinateValid);
@@ -1401,6 +1403,26 @@ function App() {
   const handleGridTrenchChange = (value: string) => {
     setGridTrenchFilter(value);
     setGridStratumFilter("");
+  };
+
+  const toggleArtifactTypeFilter = (type: string) => {
+    setGridArtifactTypeFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const selectAllArtifactTypes = () => {
+    setGridArtifactTypeFilter(new Set(artifactTypes));
+  };
+
+  const clearAllArtifactTypes = () => {
+    setGridArtifactTypeFilter(new Set());
   };
 
   const validateForm = (): boolean => {
@@ -2905,13 +2927,44 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                 </select>
               </label>
               <div className="grid-legend">
-                <span className="legend-label">图例：</span>
-                {artifactTypes.map(type => (
-                  <span key={type} className="legend-item">
-                    <i className="legend-dot" style={{ background: getArtifactTypeColor(type) }} />
-                    {type}
-                  </span>
-                ))}
+                <div className="legend-header">
+                  <span className="legend-label">出土物类型筛选：</span>
+                  <div className="legend-actions">
+                    <button
+                      type="button"
+                      className="legend-action-btn"
+                      onClick={selectAllArtifactTypes}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="legend-action-btn"
+                      onClick={clearAllArtifactTypes}
+                    >
+                      清空
+                    </button>
+                  </div>
+                </div>
+                <div className="legend-items">
+                  {artifactTypes.map(type => {
+                    const isSelected = gridArtifactTypeFilter.has(type);
+                    return (
+                      <label
+                        key={type}
+                        className={`legend-item ${isSelected ? 'selected' : 'deselected'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleArtifactTypeFilter(type)}
+                        />
+                        <i className="legend-dot" style={{ background: getArtifactTypeColor(type) }} />
+                        {type}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
