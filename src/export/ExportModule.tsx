@@ -12,6 +12,7 @@ import type {
   ExportDataPackage,
   ExportOptions,
   ExportModuleProps,
+  UserRole,
 } from "./types";
 
 const categoryLabels: Record<string, string> = {

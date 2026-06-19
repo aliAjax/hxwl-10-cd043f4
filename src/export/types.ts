@@ -13,6 +13,8 @@ import type {
   UserRole,
 } from "../types";
 
+export type { UserRole };
+
 export interface ProjectMetrics {
   trenchCount: number;
   stratumCount: number;
