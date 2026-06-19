@@ -473,11 +473,11 @@ export default function ExcavationOverview({
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  const renderItem = (item: typeof filteredItems[0]) => {
+  const renderItem = (item: typeof filteredItems[0], index: number) => {
     if ("fieldName" in item) {
       return (
         <MissingFieldItemView
-          key={`field-${item.recordId}-${String(item.fieldName)}`}
+          key={`missing-field-${item.recordId}-${String(item.fieldName)}`}
           item={item}
           onClick={() => handleItemClick(item)}
         />
@@ -486,7 +486,7 @@ export default function ExcavationOverview({
     if ("stratumA" in item && "stratumB" in item) {
       return (
         <PendingRelationItemView
-          key={`rel-${item.stratumA}-${item.stratumB}-${item.relationId || "new"}`}
+          key={`pending-relation-${item.stratumA}-${item.stratumB}-${item.relationId || "new"}`}
           item={item}
           onClick={() => handleItemClick(item)}
         />
@@ -495,7 +495,7 @@ export default function ExcavationOverview({
     if ("approvedAt" in item) {
       return (
         <PendingArchiveItemView
-          key={`archive-${item.recordId}`}
+          key={`pending-archive-${item.recordId}`}
           item={item}
           onClick={() => handleItemClick(item)}
         />
@@ -504,7 +504,7 @@ export default function ExcavationOverview({
     if ("type" in item && "severity" in item) {
       return (
         <AnomalyItemView
-          key={item.id}
+          key={`anomaly-${item.id}`}
           item={item}
           onClick={() => handleItemClick(item)}
         />

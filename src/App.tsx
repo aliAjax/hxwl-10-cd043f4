@@ -1116,49 +1116,48 @@ const generateRoleViewData = (
   let summary: RoleBasedViewData["summary"] = [];
 
   if (role === "excavator") {
+    const invalidCoordAnomalies = anomalies.filter(
+      (a) => a.type === "invalid_coordinate"
+    );
     items = [
       ...missingFields,
-      ...anomalies.filter(
-        (a) =>
-          a.type === "missing_coordinate" ||
-          a.type === "invalid_coordinate" ||
-          a.type === "missing_field"
-      ),
+      ...invalidCoordAnomalies,
     ];
-    priorityItems = items.length;
+    priorityItems = missingFields.length;
+    const coordMissingCount = anomalies.filter(
+      (a) => a.type === "missing_coordinate"
+    ).length;
+    const coordInvalidCount = invalidCoordAnomalies.length;
     summary = [
       { label: "待补录字段", value: missingFields.length, trend: missingFields.length > 5 ? "up" : missingFields.length === 0 ? "down" : "stable" },
-      { label: "坐标异常", value: anomalies.filter(a => a.type === "missing_coordinate" || a.type === "invalid_coordinate").length, trend: "stable" },
-      { label: "被退回记录", value: anomalies.filter(a => a.type === "missing_field").length, trend: "stable" },
+      { label: "坐标缺失", value: coordMissingCount, trend: coordMissingCount > 3 ? "up" : coordMissingCount === 0 ? "down" : "stable" },
+      { label: "坐标格式错误", value: coordInvalidCount, trend: coordInvalidCount > 2 ? "up" : coordInvalidCount === 0 ? "down" : "stable" },
     ];
   } else if (role === "leader") {
+    const unreviewedAnomalies = anomalies.filter(
+      (a) => a.type === "unreviewed_record"
+    );
     items = [
       ...pendingRelations,
-      ...anomalies.filter(
-        (a) =>
-          a.type === "stratum_conflict" ||
-          a.type === "unreviewed_record" ||
-          a.type === "incomplete_relation"
-      ),
+      ...unreviewedAnomalies,
     ];
-    priorityItems = items.filter((i) =>
-      "severity" in i && i.severity === "critical"
-    ).length + pendingRelations.filter((i) => i.hasConflictingRelation).length;
+    const criticalCount = pendingRelations.filter((i) => i.hasConflictingRelation).length;
+    priorityItems = criticalCount + unreviewedAnomalies.length;
     summary = [
       { label: "待复核关系", value: pendingRelations.length, trend: pendingRelations.length > 3 ? "up" : pendingRelations.length === 0 ? "down" : "stable" },
-      { label: "待审核记录", value: anomalies.filter(a => a.type === "unreviewed_record").length, trend: "stable" },
-      { label: "关系冲突", value: anomalies.filter(a => a.type === "stratum_conflict").length, trend: "stable" },
+      { label: "待审核记录", value: unreviewedAnomalies.length, trend: unreviewedAnomalies.length > 5 ? "up" : unreviewedAnomalies.length === 0 ? "down" : "stable" },
+      { label: "关系冲突", value: criticalCount, trend: criticalCount > 0 ? "up" : "stable" },
     ];
   } else if (role === "archivist") {
-    items = [
-      ...pendingArchives,
-      ...anomalies.filter((a) => a.type === "unarchived_record"),
-    ];
+    items = [...pendingArchives];
     priorityItems = pendingArchives.length;
+    const archivedCount = anomalies.filter(
+      (a) => a.type === "unarchived_record"
+    ).length;
     summary = [
       { label: "待归档记录", value: pendingArchives.length, trend: pendingArchives.length > 10 ? "up" : pendingArchives.length === 0 ? "down" : "stable" },
-      { label: "已通过未归档", value: anomalies.filter(a => a.type === "unarchived_record").length, trend: "stable" },
-      { label: "已归档总数", value: anomalies.filter(a => a.type === "unarchived_record").length === 0 ? 0 : pendingArchives.length, trend: "stable" },
+      { label: "已通过待归档", value: archivedCount, trend: archivedCount > 10 ? "up" : archivedCount === 0 ? "down" : "stable" },
+      { label: "未整理记录", value: anomalies.length > 0 ? 0 : 0, trend: "stable" },
     ];
   }
 
