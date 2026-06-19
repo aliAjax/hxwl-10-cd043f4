@@ -1747,7 +1747,6 @@ function App() {
     setDraftName("");
     setEditingRecordId(null);
     setEditingRelationContext(null);
-    setAutoScrollBackToExport(false);
   };
 
   const handleCopyLastRecord = () => {
@@ -2219,7 +2218,6 @@ function App() {
     });
     setRelationFormErrors({});
     setEditingRelationContext(null);
-    setAutoScrollBackToExport(false);
   };
 
   const handleDeleteRelation = (id: number) => {
