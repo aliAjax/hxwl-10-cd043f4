@@ -3117,3 +3117,781 @@ button:disabled {
   }
 }
 
+/* ============================================================
+   多探方发掘进度总览 - 样式
+   ============================================================ */
+
+.overview-panel {
+  margin-bottom: 20px;
+}
+
+.overview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.overall-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.overall-progress span {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.overview-update-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.overview-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+}
+
+.overview-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.overview-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-subtitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 12px;
+}
+
+.section-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 进度条 */
+.overview-progress-bar {
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.overview-progress-bar.h-2 {
+  height: 6px;
+}
+
+.overview-progress-bar.h-3 {
+  height: 8px;
+}
+
+.overview-progress-bar.h-4 {
+  height: 12px;
+}
+
+.overview-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* 角色切换区域 */
+.role-switch-section {
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.role-summary-card {
+  background: #ffffff;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-summary-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
+}
+
+.role-summary-active {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  box-shadow: 0 4px 12px rgba(133, 77, 14, 0.15);
+}
+
+.role-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.role-summary-header h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.role-priority-badge {
+  background: #e11d48;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.role-summary-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.role-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.role-stat-label {
+  color: #64748b;
+}
+
+.role-stat-value {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.role-stat-trend {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.trend-up {
+  color: #e11d48;
+}
+
+.trend-down {
+  color: #047857;
+}
+
+.trend-stable {
+  color: #64748b;
+}
+
+/* 探方网格 */
+.trenches-section {
+  padding-bottom: 4px;
+}
+
+.trenches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.trench-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trench-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.trench-card-selected {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  box-shadow: 0 4px 12px rgba(133, 77, 14, 0.15);
+}
+
+.trench-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.trench-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.trench-card-progress {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.trench-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.trench-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.trench-stat-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.trench-stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.trench-stat-value.status-pending {
+  color: #f59e0b;
+}
+
+.trench-stat-value.status-approved {
+  color: #047857;
+}
+
+.trench-stat-value.status-archived {
+  color: #475569;
+}
+
+.trench-card-anomalies {
+  margin-top: 10px;
+}
+
+.anomaly-badge {
+  display: inline-block;
+  background: #fef2f2;
+  color: #e11d48;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+}
+
+.trench-card-footer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.trench-card-time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* 筛选器 */
+.overview-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.overview-filter-select {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.overview-filter-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(133, 77, 14, 0.1);
+}
+
+/* 待处理事项列表 */
+.items-section {
+  padding-bottom: 4px;
+}
+
+.items-empty {
+  text-align: center;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-radius: 10px;
+  border: 1px dashed #86efac;
+}
+
+.items-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.items-empty p {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #047857;
+}
+
+.items-empty-hint {
+  font-size: 13px !important;
+  color: #4ade80 !important;
+  font-weight: 400 !important;
+}
+
+.overview-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.overview-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.overview-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateX(4px);
+}
+
+.overview-item-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.missing-icon {
+  background: #fef3c7;
+}
+
+.relation-icon {
+  background: #dbeafe;
+}
+
+.conflict-icon {
+  background: #fee2e2;
+}
+
+.archive-icon {
+  background: #dcfce7;
+}
+
+.overview-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.overview-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.item-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.type-missing {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.type-relation {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+
+.type-conflict {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.type-archive {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.overview-item-header strong {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.item-qty {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.overview-item-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 6px;
+}
+
+.overview-item-message {
+  font-size: 13px;
+  color: #334155;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.overview-item-message strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.overview-item-suggestion {
+  font-size: 12px;
+  color: #047857;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  background: #f0fdf4;
+  border-radius: 6px;
+}
+
+.overview-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #f1f5f9;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.overview-item-time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.related-count {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.relation-item.relation-conflict {
+  border-left: 3px solid #e11d48;
+  background: linear-gradient(90deg, #fef2f2 0%, #ffffff 100%);
+}
+
+/* 未整理统计面板 */
+.unorganized-stats-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.unorganized-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.unorganized-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.unorganized-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.unorganized-stat-label {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+/* 地层详情面板 */
+.stratum-details-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  flex: 1;
+}
+
+.details-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #94a3b8;
+}
+
+.details-empty-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+.details-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.details-header {
+  margin-bottom: 16px;
+}
+
+.details-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.details-progress span {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.details-section {
+  margin-bottom: 16px;
+}
+
+.details-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.stratum-list,
+.relic-unit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stratum-item,
+.relic-unit-item {
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.stratum-item-header,
+.relic-unit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.stratum-item-header strong,
+.relic-unit-header strong {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.stratum-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.relic-stratum {
+  font-size: 11px;
+  color: #64748b;
+  padding: 2px 6px;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.stratum-item-stats,
+.relic-unit-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.stat-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.stat-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.stat-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.stat-archived {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.stat-anomaly {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.stat-warning {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.relic-unit-stats {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.relic-unit-stats span {
+  margin-right: 10px;
+}
+
+.relic-anomaly {
+  color: #e11d48;
+  font-weight: 600;
+}
+
+.stratum-item-time {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.issues-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #475569;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.issue-icon {
+  font-size: 14px;
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .overview-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .role-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .overview-header-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trenches-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-row-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .overview-items-list {
+    max-height: 400px;
+  }
+}
+

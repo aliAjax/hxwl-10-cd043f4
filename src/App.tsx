@@ -8,6 +8,7 @@ import {
   clearAllDrafts as clearAllDraftsFromDB,
 } from "./indexedDB";
 import ExportModule from "./export";
+import ExcavationOverview from "./ExcavationOverview";
 import {
   type ReviewStatus,
   type UserRole,
@@ -25,6 +26,18 @@ import {
   type BatchImportRow,
   type ParsedImportResult,
   type DraftRecord,
+  type AnomalyType,
+  type AnomalyRecord,
+  type MissingFieldItem,
+  type PendingRelationItem,
+  type PendingArchiveItem,
+  type TrenchSummary,
+  type StratumSummary,
+  type RelicUnitSummary,
+  type UnorganizedStats,
+  type OverviewState,
+  type RoleBasedViewData,
+  type OverviewFilters,
   batchImportHeaders,
 } from "./types";
 
@@ -571,6 +584,647 @@ const validateRecordCoordinates = (record: ArtifactRecord): ValidatedArtifactRec
   return { ...record, eValue, nValue, isCoordinateValid, coordinateError };
 };
 
+const FIELD_LABELS: Partial<Record<keyof ArtifactRecord, string>> = {
+  eCoordinate: "E坐标",
+  nCoordinate: "N坐标",
+  depth: "深度",
+  artifactType: "出土物类型",
+  stratum: "地层",
+  trenchNumber: "探方编号",
+  quantity: "数量",
+  relicUnit: "遗迹单位",
+  remarks: "备注",
+};
+
+const REQUIRED_FIELDS: (keyof ArtifactRecord)[] = [
+  "trenchNumber",
+  "stratum",
+  "artifactType",
+  "eCoordinate",
+  "nCoordinate",
+  "depth",
+];
+
+const generateMissingFields = (
+  records: ArtifactRecord[]
+): MissingFieldItem[] => {
+  const missingFields: MissingFieldItem[] = [];
+
+  records.forEach((record) => {
+    if (record.status === "archived") return;
+
+    REQUIRED_FIELDS.forEach((field) => {
+      const value = record[field];
+      if (typeof value === "string" && (!value || value.trim() === "")) {
+        missingFields.push({
+          recordId: record.id,
+          trenchNumber: record.trenchNumber,
+          stratum: record.stratum,
+          fieldName: field,
+          fieldLabel: FIELD_LABELS[field] || String(field),
+          currentValue: value || "",
+          artifactType: record.artifactType,
+          submittedAt: record.submittedAt,
+        });
+      }
+    });
+
+    if (!record.quantity || record.quantity.trim() === "") {
+      missingFields.push({
+        recordId: record.id,
+        trenchNumber: record.trenchNumber,
+        stratum: record.stratum,
+        fieldName: "quantity",
+        fieldLabel: "数量",
+        currentValue: record.quantity || "",
+        artifactType: record.artifactType,
+        submittedAt: record.submittedAt,
+      });
+    }
+  });
+
+  return missingFields;
+};
+
+const generatePendingRelations = (
+  records: ArtifactRecord[],
+  relations: StratumRelation[]
+): PendingRelationItem[] => {
+  const pending: PendingRelationItem[] = [];
+  const strataSet = new Set<string>();
+
+  records.forEach((r) => {
+    if (r.stratum) strataSet.add(r.stratum);
+  });
+
+  const strataList = Array.from(strataSet).sort();
+
+  for (let i = 0; i < strataList.length; i++) {
+    for (let j = i + 1; j < strataList.length; j++) {
+      const stratumA = strataList[i];
+      const stratumB = strataList[j];
+
+      const hasRelation = relations.some(
+        (r) =>
+          (r.stratumA === stratumA && r.stratumB === stratumB) ||
+          (r.stratumA === stratumB && r.stratumB === stratumA)
+      );
+
+      if (!hasRelation) {
+        const relatedArtifacts = records.filter(
+          (r) => r.stratum === stratumA || r.stratum === stratumB
+        );
+
+        const trenchNumbers = Array.from(
+          new Set(relatedArtifacts.map((r) => r.trenchNumber))
+        );
+
+        pending.push({
+          trenchNumber: trenchNumbers[0] || "",
+          stratumA,
+          stratumB,
+          issue: `${stratumA} 与 ${stratumB} 之间尚未建立地层关系`,
+          suggestion: "请确认两者的年代关系（早于/打破/包含）",
+          relatedArtifactCount: relatedArtifacts.length,
+        });
+      }
+    }
+  }
+
+  relations.forEach((rel) => {
+    const conflict = checkConflictRelationStatic(
+      rel.stratumA,
+      rel.stratumB,
+      rel.relationType,
+      relations
+    );
+    if (conflict.hasConflict) {
+      const relatedArtifacts = records.filter(
+        (r) => r.stratum === rel.stratumA || r.stratum === rel.stratumB
+      );
+
+      pending.push({
+        relationId: rel.id,
+        trenchNumber:
+          relatedArtifacts[0]?.trenchNumber ||
+          records.find((r) => r.stratum === rel.stratumA)?.trenchNumber ||
+          "",
+        stratumA: rel.stratumA,
+        stratumB: rel.stratumB,
+        issue: conflict.message,
+        suggestion: "请重新核对地层关系",
+        hasConflictingRelation: true,
+        relatedArtifactCount: relatedArtifacts.length,
+      });
+    }
+  });
+
+  return pending;
+};
+
+const checkConflictRelationStatic = (
+  a: string,
+  b: string,
+  type: RelationType,
+  allRelations: StratumRelation[]
+): { hasConflict: boolean; message: string } => {
+  const getLabel = (t: RelationType) =>
+    relationTypeOptions.find((o) => o.value === t)?.label || t;
+
+  for (const r of allRelations) {
+    if (r.relationType === type) {
+      if (r.stratumA === b && r.stratumB === a) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${b} ${getLabel(type)} ${a}"，不能同时存在 "${a} ${getLabel(type)} ${b}"`,
+        };
+      }
+    }
+    if (type === "contains" && r.relationType === "contains") {
+      if (r.stratumA === b && r.stratumB === a) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`,
+        };
+      }
+    }
+    if (type === "breaks" && r.relationType === "earlier") {
+      if (r.stratumA === a && r.stratumB === b) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${a} 早于 ${b}"，不能同时存在 "${a} 打破 ${b}"（打破意味着年代更晚）`,
+        };
+      }
+    }
+    if (type === "earlier" && r.relationType === "breaks") {
+      if (r.stratumA === a && r.stratumB === b) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${a} 打破 ${b}"，不能同时存在 "${a} 早于 ${b}"（打破意味着年代更晚）`,
+        };
+      }
+    }
+    if (type === "breaks" && r.relationType === "breaks") {
+      if (r.stratumA === b && r.stratumB === a) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${b} 打破 ${a}"，不能同时存在 "${a} 打破 ${b}"`,
+        };
+      }
+    }
+    if (type === "earlier" && r.relationType === "earlier") {
+      if (r.stratumA === b && r.stratumB === a) {
+        return {
+          hasConflict: true,
+          message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`,
+        };
+      }
+    }
+  }
+  return { hasConflict: false, message: "" };
+};
+
+const generatePendingArchives = (
+  records: ArtifactRecord[]
+): PendingArchiveItem[] => {
+  return records
+    .filter((r) => r.status === "approved")
+    .map((r) => ({
+      recordId: r.id,
+      trenchNumber: r.trenchNumber,
+      stratum: r.stratum,
+      artifactType: r.artifactType,
+      quantity: r.quantity,
+      approvedBy: r.reviewedBy,
+      approvedAt: r.reviewedAt,
+      reviewReason: r.reviewReason,
+    }))
+    .sort((a, b) => {
+      if (!a.approvedAt || !b.approvedAt) return 0;
+      return new Date(a.approvedAt).getTime() - new Date(b.approvedAt).getTime();
+    });
+};
+
+const generateAnomalies = (
+  records: ArtifactRecord[],
+  relations: StratumRelation[],
+  validatedRecords: ValidatedArtifactRecord[]
+): AnomalyRecord[] => {
+  const anomalies: AnomalyRecord[] = [];
+  const now = new Date().toLocaleString("zh-CN");
+
+  validatedRecords.forEach((vr) => {
+    if (vr.status === "archived") return;
+
+    if (!vr.isCoordinateValid) {
+      anomalies.push({
+        id: `coord-${vr.id}`,
+        type: vr.coordinateError?.includes("为空")
+          ? "missing_coordinate"
+          : "invalid_coordinate",
+        trenchNumber: vr.trenchNumber,
+        stratum: vr.stratum,
+        relicUnit: vr.relicUnit,
+        recordId: vr.id,
+        severity: vr.coordinateError?.includes("为空") ? "error" : "warning",
+        message: `${vr.artifactType} #${vr.id}: ${vr.coordinateError}`,
+        affectedRole: ["excavator", "leader"],
+        createdAt: now,
+      });
+    }
+
+    REQUIRED_FIELDS.forEach((field) => {
+      const value = vr[field];
+      if (typeof value === "string" && (!value || value.trim() === "")) {
+        anomalies.push({
+          id: `field-${vr.id}-${String(field)}`,
+          type: "missing_field",
+          trenchNumber: vr.trenchNumber,
+          stratum: vr.stratum,
+          relicUnit: vr.relicUnit,
+          recordId: vr.id,
+          severity: "warning",
+          message: `${vr.artifactType} #${vr.id}: 缺少${FIELD_LABELS[field] || String(field)}`,
+          affectedRole: ["excavator"],
+          createdAt: now,
+        });
+      }
+    });
+  });
+
+  records.forEach((r) => {
+    if (r.status === "pending") {
+      anomalies.push({
+        id: `review-${r.id}`,
+        type: "unreviewed_record",
+        trenchNumber: r.trenchNumber,
+        stratum: r.stratum,
+        relicUnit: r.relicUnit,
+        recordId: r.id,
+        severity: "warning",
+        message: `${r.artifactType} #${r.id}: 待审核`,
+        affectedRole: ["leader"],
+        createdAt: r.submittedAt || now,
+      });
+    }
+  });
+
+  records.forEach((r) => {
+    if (r.status === "approved") {
+      anomalies.push({
+        id: `archive-${r.id}`,
+        type: "unarchived_record",
+        trenchNumber: r.trenchNumber,
+        stratum: r.stratum,
+        relicUnit: r.relicUnit,
+        recordId: r.id,
+        severity: "warning",
+        message: `${r.artifactType} #${r.id}: 待归档`,
+        affectedRole: ["archivist"],
+        createdAt: r.reviewedAt || now,
+      });
+    }
+  });
+
+  relations.forEach((rel) => {
+    const conflict = checkConflictRelationStatic(
+      rel.stratumA,
+      rel.stratumB,
+      rel.relationType,
+      relations
+    );
+    if (conflict.hasConflict) {
+      anomalies.push({
+        id: `rel-conflict-${rel.id}`,
+        type: "stratum_conflict",
+        trenchNumber:
+          records.find((r) => r.stratum === rel.stratumA)?.trenchNumber ||
+          records.find((r) => r.stratum === rel.stratumB)?.trenchNumber ||
+          "",
+        stratum: rel.stratumA,
+        recordId: rel.id,
+        severity: "critical",
+        message: conflict.message,
+        affectedRole: ["leader"],
+        createdAt: rel.createdAt,
+      });
+    }
+  });
+
+  return anomalies;
+};
+
+const generateStratumSummary = (
+  trenchNumber: string,
+  stratumName: string,
+  records: ArtifactRecord[],
+  relations: StratumRelation[],
+  validatedRecords: ValidatedArtifactRecord[]
+): StratumSummary => {
+  const stratumRecords = records.filter(
+    (r) => r.trenchNumber === trenchNumber && r.stratum === stratumName
+  );
+
+  const validatedStratumRecords = validatedRecords.filter(
+    (r) => r.trenchNumber === trenchNumber && r.stratum === stratumName
+  );
+
+  const hasRelations = relations.some(
+    (r) => r.stratumA === stratumName || r.stratumB === stratumName
+  );
+
+  const anomalyCount = validatedStratumRecords.filter(
+    (r) => !r.isCoordinateValid
+  ).length;
+
+  const lastUpdated = stratumRecords.length > 0
+    ? stratumRecords.reduce((latest, r) => {
+        const rTime = new Date(r.createdAt).getTime();
+        return rTime > new Date(latest).getTime() ? r.createdAt : latest;
+      }, stratumRecords[0].createdAt)
+    : "";
+
+  return {
+    name: stratumName,
+    trenchNumber,
+    artifactCount: stratumRecords.length,
+    pendingReviewCount: stratumRecords.filter((r) => r.status === "pending").length,
+    approvedCount: stratumRecords.filter((r) => r.status === "approved").length,
+    archivedCount: stratumRecords.filter((r) => r.status === "archived").length,
+    rejectedCount: stratumRecords.filter((r) => r.status === "rejected").length,
+    hasRelations,
+    anomalyCount,
+    lastUpdated,
+  };
+};
+
+const generateRelicUnitSummary = (
+  trenchNumber: string,
+  relicUnitName: string,
+  records: ArtifactRecord[]
+): RelicUnitSummary => {
+  const relicRecords = records.filter(
+    (r) => r.trenchNumber === trenchNumber && r.relicUnit === relicUnitName
+  );
+
+  const stratum = relicRecords[0]?.stratum || "";
+
+  return {
+    name: relicUnitName,
+    trenchNumber,
+    stratum,
+    artifactCount: relicRecords.length,
+    pendingReviewCount: relicRecords.filter((r) => r.status === "pending").length,
+    approvedCount: relicRecords.filter((r) => r.status === "approved").length,
+    archivedCount: relicRecords.filter((r) => r.status === "archived").length,
+    anomalyCount: relicRecords.filter((r) => {
+      const eCheck = isValidCoordinateFormat(r.eCoordinate);
+      const nCheck = isValidCoordinateFormat(r.nCoordinate);
+      return !eCheck.valid || !nCheck.valid;
+    }).length,
+  };
+};
+
+const generateTrenchSummaries = (
+  records: ArtifactRecord[],
+  relations: StratumRelation[],
+  validatedRecords: ValidatedArtifactRecord[]
+): TrenchSummary[] => {
+  const trenchNumbers = Array.from(
+    new Set(records.map((r) => r.trenchNumber))
+  ).sort();
+
+  return trenchNumbers.map((trenchNumber) => {
+    const trenchRecords = records.filter((r) => r.trenchNumber === trenchNumber);
+    const validatedTrenchRecords = validatedRecords.filter(
+      (r) => r.trenchNumber === trenchNumber
+    );
+
+    const strataNames = Array.from(
+      new Set(trenchRecords.map((r) => r.stratum).filter(Boolean))
+    ).sort();
+
+    const relicUnitNames = Array.from(
+      new Set(trenchRecords.map((r) => r.relicUnit).filter(Boolean))
+    ).sort();
+
+    const strata = strataNames.map((s) =>
+      generateStratumSummary(trenchNumber, s, records, relations, validatedRecords)
+    );
+
+    const relicUnits = relicUnitNames.map((ru) =>
+      generateRelicUnitSummary(trenchNumber, ru, records)
+    );
+
+    const totalArtifacts = trenchRecords.length;
+    const archived = trenchRecords.filter((r) => r.status === "archived").length;
+    const progressPercent =
+      totalArtifacts > 0 ? Math.round((archived / totalArtifacts) * 100) : 0;
+
+    const coordinateAnomalies = validatedTrenchRecords.filter(
+      (r) => !r.isCoordinateValid
+    ).length;
+
+    const fieldAnomalies = trenchRecords.filter((r) => {
+      return REQUIRED_FIELDS.some((f) => {
+        const v = r[f];
+        return typeof v === "string" && (!v || v.trim() === "");
+      });
+    }).length;
+
+    const relationIssues = generatePendingRelations(trenchRecords, relations).length;
+
+    const lastActivity = trenchRecords.length > 0
+      ? trenchRecords.reduce((latest, r) => {
+          const rTime = new Date(r.createdAt).getTime();
+          return rTime > new Date(latest).getTime() ? r.createdAt : latest;
+        }, trenchRecords[0].createdAt)
+      : "";
+
+    return {
+      trenchNumber,
+      strata,
+      relicUnits,
+      totalArtifacts,
+      pendingReview: trenchRecords.filter((r) => r.status === "pending").length,
+      approved: trenchRecords.filter((r) => r.status === "approved").length,
+      archived,
+      rejected: trenchRecords.filter((r) => r.status === "rejected").length,
+      coordinateAnomalies,
+      fieldAnomalies,
+      relationIssues,
+      progressPercent,
+      lastActivity,
+    };
+  });
+};
+
+const generateUnorganizedStats = (
+  records: ArtifactRecord[],
+  validatedRecords: ValidatedArtifactRecord[]
+): UnorganizedStats => {
+  const totalRecords = records.length;
+
+  const missingCoordinates = validatedRecords.filter(
+    (r) =>
+      !r.isCoordinateValid &&
+      (r.coordinateError?.includes("为空") ||
+        !r.eCoordinate.trim() ||
+        !r.nCoordinate.trim())
+  ).length;
+
+  const invalidCoordinates = validatedRecords.filter(
+    (r) => !r.isCoordinateValid && r.eCoordinate.trim() && r.nCoordinate.trim()
+  ).length;
+
+  const missingRequiredFields = records.filter((r) =>
+    REQUIRED_FIELDS.some((f) => {
+      const v = r[f];
+      return typeof v === "string" && (!v || v.trim() === "");
+    })
+  ).length;
+
+  const withoutRelicUnit = records.filter(
+    (r) => !r.relicUnit || r.relicUnit.trim() === ""
+  ).length;
+
+  const withoutQuantity = records.filter(
+    (r) => !r.quantity || r.quantity.trim() === ""
+  ).length;
+
+  return {
+    totalRecords,
+    missingCoordinates,
+    invalidCoordinates,
+    missingRequiredFields,
+    withoutRelicUnit,
+    withoutQuantity,
+  };
+};
+
+const generateRoleViewData = (
+  role: UserRole,
+  missingFields: MissingFieldItem[],
+  pendingRelations: PendingRelationItem[],
+  pendingArchives: PendingArchiveItem[],
+  anomalies: AnomalyRecord[]
+): RoleBasedViewData => {
+  const roleName = roleNames[role];
+
+  let items: RoleBasedViewData["items"] = [];
+  let priorityItems = 0;
+  let summary: RoleBasedViewData["summary"] = [];
+
+  if (role === "excavator") {
+    items = [
+      ...missingFields,
+      ...anomalies.filter(
+        (a) =>
+          a.type === "missing_coordinate" ||
+          a.type === "invalid_coordinate" ||
+          a.type === "missing_field"
+      ),
+    ];
+    priorityItems = items.length;
+    summary = [
+      { label: "待补录字段", value: missingFields.length, trend: missingFields.length > 5 ? "up" : missingFields.length === 0 ? "down" : "stable" },
+      { label: "坐标异常", value: anomalies.filter(a => a.type === "missing_coordinate" || a.type === "invalid_coordinate").length, trend: "stable" },
+      { label: "被退回记录", value: anomalies.filter(a => a.type === "missing_field").length, trend: "stable" },
+    ];
+  } else if (role === "leader") {
+    items = [
+      ...pendingRelations,
+      ...anomalies.filter(
+        (a) =>
+          a.type === "stratum_conflict" ||
+          a.type === "unreviewed_record" ||
+          a.type === "incomplete_relation"
+      ),
+    ];
+    priorityItems = items.filter((i) =>
+      "severity" in i && i.severity === "critical"
+    ).length + pendingRelations.filter((i) => i.hasConflictingRelation).length;
+    summary = [
+      { label: "待复核关系", value: pendingRelations.length, trend: pendingRelations.length > 3 ? "up" : pendingRelations.length === 0 ? "down" : "stable" },
+      { label: "待审核记录", value: anomalies.filter(a => a.type === "unreviewed_record").length, trend: "stable" },
+      { label: "关系冲突", value: anomalies.filter(a => a.type === "stratum_conflict").length, trend: "stable" },
+    ];
+  } else if (role === "archivist") {
+    items = [
+      ...pendingArchives,
+      ...anomalies.filter((a) => a.type === "unarchived_record"),
+    ];
+    priorityItems = pendingArchives.length;
+    summary = [
+      { label: "待归档记录", value: pendingArchives.length, trend: pendingArchives.length > 10 ? "up" : pendingArchives.length === 0 ? "down" : "stable" },
+      { label: "已通过未归档", value: anomalies.filter(a => a.type === "unarchived_record").length, trend: "stable" },
+      { label: "已归档总数", value: anomalies.filter(a => a.type === "unarchived_record").length === 0 ? 0 : pendingArchives.length, trend: "stable" },
+    ];
+  }
+
+  return {
+    role,
+    roleName,
+    priorityItems,
+    items,
+    summary,
+  };
+};
+
+const generateOverviewState = (
+  records: ArtifactRecord[],
+  relations: StratumRelation[],
+  validatedRecords: ValidatedArtifactRecord[]
+): OverviewState => {
+  const trenches = generateTrenchSummaries(records, relations, validatedRecords);
+  const anomalies = generateAnomalies(records, relations, validatedRecords);
+  const missingFields = generateMissingFields(records);
+  const pendingRelations = generatePendingRelations(records, relations);
+  const pendingArchives = generatePendingArchives(records);
+  const unorganizedStats = generateUnorganizedStats(records, validatedRecords);
+
+  const roleViews = {
+    excavator: generateRoleViewData(
+      "excavator",
+      missingFields,
+      pendingRelations,
+      pendingArchives,
+      anomalies
+    ),
+    leader: generateRoleViewData(
+      "leader",
+      missingFields,
+      pendingRelations,
+      pendingArchives,
+      anomalies
+    ),
+    archivist: generateRoleViewData(
+      "archivist",
+      missingFields,
+      pendingRelations,
+      pendingArchives,
+      anomalies
+    ),
+  };
+
+  const totalRecords = records.length;
+  const archivedRecords = records.filter((r) => r.status === "archived").length;
+  const overallProgress =
+    totalRecords > 0 ? Math.round((archivedRecords / totalRecords) * 100) : 0;
+
+  return {
+    trenches,
+    anomalies,
+    missingFields,
+    pendingRelations,
+    pendingArchives,
+    unorganizedStats,
+    roleViews,
+    overallProgress,
+    lastUpdated: new Date().toLocaleString("zh-CN"),
+  };
+};
+
 const artifactTypeColors: Record<string, string> = {
   "陶片": "#854d0e",
   "石器": "#475569",
@@ -654,6 +1308,12 @@ function App() {
   });
 
   const validatedRecords: ValidatedArtifactRecord[] = artifactRecords.map(validateRecordCoordinates);
+
+  const overviewState: OverviewState = generateOverviewState(
+    artifactRecords,
+    stratumRelations,
+    validatedRecords
+  );
 
   const availableGridTrenches: string[] = Array.from(
     new Set(validatedRecords.map(r => r.trenchNumber).filter(Boolean))
@@ -1464,6 +2124,12 @@ function App() {
           <MetricCard key={metric} label={metric} value={values[index]} index={index} />
         ))}
       </section>
+
+      <ExcavationOverview
+        overviewState={overviewState}
+        currentRole={currentRole}
+        onRoleChange={setCurrentRole}
+      />
 
       <section className="workspace">
         <aside className="panel narrow">

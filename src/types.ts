@@ -153,3 +153,153 @@ export interface DraftRecord {
 }
 
 export type DraftFormData = Omit<DraftRecord, "id" | "savedAt">;
+
+// ============================================================
+// 多探方发掘进度总览 - 数据模型
+// ============================================================
+
+// 异常类型
+export type AnomalyType =
+  | "missing_coordinate"
+  | "invalid_coordinate"
+  | "missing_field"
+  | "stratum_conflict"
+  | "unreviewed_record"
+  | "unarchived_record"
+  | "incomplete_relation";
+
+export interface AnomalyRecord {
+  id: string;
+  type: AnomalyType;
+  trenchNumber: string;
+  stratum?: string;
+  relicUnit?: string;
+  recordId?: number;
+  severity: "warning" | "error" | "critical";
+  message: string;
+  affectedRole: UserRole[];
+  createdAt: string;
+}
+
+// 待补录字段 - 发掘队员关注
+export interface MissingFieldItem {
+  recordId: number;
+  trenchNumber: string;
+  stratum: string;
+  fieldName: keyof ArtifactRecord;
+  fieldLabel: string;
+  currentValue: string;
+  artifactType: string;
+  submittedAt?: string;
+}
+
+// 待复核关系 - 领队关注
+export interface PendingRelationItem {
+  relationId?: number;
+  trenchNumber: string;
+  stratumA: string;
+  stratumB: string;
+  issue: string;
+  suggestion?: string;
+  hasConflictingRelation?: boolean;
+  relatedArtifactCount: number;
+}
+
+// 待归档记录 - 资料整理员关注
+export interface PendingArchiveItem {
+  recordId: number;
+  trenchNumber: string;
+  stratum: string;
+  artifactType: string;
+  quantity?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  reviewReason?: string;
+}
+
+// 地层汇总
+export interface StratumSummary {
+  name: string;
+  trenchNumber: string;
+  artifactCount: number;
+  pendingReviewCount: number;
+  approvedCount: number;
+  archivedCount: number;
+  rejectedCount: number;
+  hasRelations: boolean;
+  anomalyCount: number;
+  lastUpdated: string;
+}
+
+// 遗迹单位汇总
+export interface RelicUnitSummary {
+  name: string;
+  trenchNumber: string;
+  stratum: string;
+  artifactCount: number;
+  pendingReviewCount: number;
+  approvedCount: number;
+  archivedCount: number;
+  anomalyCount: number;
+}
+
+// 探方汇总
+export interface TrenchSummary {
+  trenchNumber: string;
+  strata: StratumSummary[];
+  relicUnits: RelicUnitSummary[];
+  totalArtifacts: number;
+  pendingReview: number;
+  approved: number;
+  archived: number;
+  rejected: number;
+  coordinateAnomalies: number;
+  fieldAnomalies: number;
+  relationIssues: number;
+  progressPercent: number;
+  lastActivity: string;
+}
+
+// 未整理记录统计
+export interface UnorganizedStats {
+  totalRecords: number;
+  missingCoordinates: number;
+  invalidCoordinates: number;
+  missingRequiredFields: number;
+  withoutRelicUnit: number;
+  withoutQuantity: number;
+}
+
+// 角色视角数据
+export interface RoleBasedViewData {
+  role: UserRole;
+  roleName: string;
+  priorityItems: number;
+  items: (MissingFieldItem | PendingRelationItem | PendingArchiveItem | AnomalyRecord)[];
+  summary: {
+    label: string;
+    value: number;
+    trend: "up" | "down" | "stable";
+  }[];
+}
+
+// 总览状态
+export interface OverviewState {
+  trenches: TrenchSummary[];
+  anomalies: AnomalyRecord[];
+  missingFields: MissingFieldItem[];
+  pendingRelations: PendingRelationItem[];
+  pendingArchives: PendingArchiveItem[];
+  unorganizedStats: UnorganizedStats;
+  roleViews: Record<UserRole, RoleBasedViewData>;
+  overallProgress: number;
+  lastUpdated: string;
+}
+
+// 总览筛选条件
+export interface OverviewFilters {
+  trenchNumber: string;
+  anomalyType: AnomalyType | "all";
+  severity: AnomalyRecord["severity"] | "all";
+  status: ReviewStatus | "all";
+}
