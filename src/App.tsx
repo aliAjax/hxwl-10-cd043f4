@@ -1,5 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
+import {
+  DraftRecord,
+  isIndexedDBSupported,
+  saveDraft as saveDraftToDB,
+  getAllDrafts,
+  deleteDraft as deleteDraftFromDB,
+  clearAllDrafts as clearAllDraftsFromDB,
+} from "./indexedDB";
 
 type ReviewStatus = "pending" | "approved" | "rejected" | "archived";
 type UserRole = "excavator" | "leader" | "archivist";
@@ -716,6 +724,15 @@ function App() {
   const [batchParseResult, setBatchParseResult] = useState<ParsedImportResult | null>(null);
   const [batchParseError, setBatchParseError] = useState<string>("");
 
+  const [indexedDBSupported, setIndexedDBSupported] = useState<boolean>(true);
+  const [drafts, setDrafts] = useState<DraftRecord[]>([]);
+  const [showDraftBox, setShowDraftBox] = useState<boolean>(false);
+  const [currentDraftId, setCurrentDraftId] = useState<number | null>(null);
+  const [draftName, setDraftName] = useState<string>("");
+  const [draftSaveMessage, setDraftSaveMessage] = useState<string>("");
+  const [showSaveDraftModal, setShowSaveDraftModal] = useState<boolean>(false);
+  const [draftDeleteConfirm, setDraftDeleteConfirm] = useState<number | null>(null);
+
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
     if (metric === "出土物") {
@@ -944,7 +961,130 @@ function App() {
       remarks: ""
     });
     setFormErrors({});
+    setCurrentDraftId(null);
+    setDraftName("");
   };
+
+  const loadDrafts = useCallback(async () => {
+    if (!indexedDBSupported) return;
+    try {
+      const allDrafts = await getAllDrafts();
+      setDrafts(allDrafts);
+    } catch (error) {
+      console.error("加载草稿失败:", error);
+    }
+  }, [indexedDBSupported]);
+
+  useEffect(() => {
+    const supported = isIndexedDBSupported();
+    setIndexedDBSupported(supported);
+    if (supported) {
+      loadDrafts();
+    }
+  }, [loadDrafts]);
+
+  const handleSaveDraft = async () => {
+    if (!indexedDBSupported) return;
+
+    const hasContent = Object.values(formData).some(v => v.trim() !== "");
+    if (!hasContent) {
+      setDraftSaveMessage("请至少填写一个字段后再保存草稿");
+      setTimeout(() => setDraftSaveMessage(""), 3000);
+      return;
+    }
+
+    setShowSaveDraftModal(true);
+    const defaultName = formData.trenchNumber
+      ? `${formData.trenchNumber}-${new Date().toLocaleDateString("zh-CN")}`
+      : `草稿-${new Date().toLocaleDateString("zh-CN")}`;
+    setDraftName(currentDraftId ? drafts.find(d => d.id === currentDraftId)?.draftName || defaultName : defaultName);
+  };
+
+  const confirmSaveDraft = async () => {
+    if (!indexedDBSupported) return;
+
+    try {
+      const id = await saveDraftToDB(
+        {
+          ...formData,
+          draftName: draftName.trim() || `${formData.trenchNumber || "未命名"}-${new Date().toLocaleDateString("zh-CN")}`,
+        },
+        currentDraftId || undefined
+      );
+      setCurrentDraftId(id);
+      setDraftSaveMessage("草稿保存成功！");
+      setShowSaveDraftModal(false);
+      await loadDrafts();
+      setTimeout(() => setDraftSaveMessage(""), 3000);
+    } catch (error) {
+      setDraftSaveMessage(error instanceof Error ? error.message : "保存草稿失败");
+      setTimeout(() => setDraftSaveMessage(""), 3000);
+    }
+  };
+
+  const handleRestoreDraft = (draft: DraftRecord) => {
+    setFormData({
+      trenchNumber: draft.trenchNumber,
+      stratum: draft.stratum,
+      artifactType: draft.artifactType,
+      eCoordinate: draft.eCoordinate,
+      nCoordinate: draft.nCoordinate,
+      depth: draft.depth,
+      remarks: draft.remarks,
+    });
+    setCurrentDraftId(draft.id);
+    setDraftName(draft.draftName);
+    setFormErrors({});
+    setShowDraftBox(false);
+    
+    const artifactSection = document.querySelector(".artifact-collection");
+    if (artifactSection) {
+      artifactSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleDeleteDraft = async (id: number) => {
+    if (!indexedDBSupported) return;
+    try {
+      await deleteDraftFromDB(id);
+      if (currentDraftId === id) {
+        setCurrentDraftId(null);
+        setDraftName("");
+      }
+      setDraftDeleteConfirm(null);
+      await loadDrafts();
+    } catch (error) {
+      console.error("删除草稿失败:", error);
+    }
+  };
+
+  const handleClearAllDrafts = async () => {
+    if (!indexedDBSupported) return;
+    if (!window.confirm("确定要清空所有草稿吗？此操作不可恢复。")) return;
+    try {
+      await clearAllDraftsFromDB();
+      setCurrentDraftId(null);
+      setDraftName("");
+      await loadDrafts();
+    } catch (error) {
+      console.error("清空草稿失败:", error);
+    }
+  };
+
+  const handleNewFromDraft = () => {
+    setCurrentDraftId(null);
+    setDraftName("");
+    handleSaveDraft();
+  };
+
+  const groupedDrafts: Record<string, DraftRecord[]> = drafts.reduce((acc, draft) => {
+    const key = draft.trenchNumber || "未指定探方";
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(draft);
+    return acc;
+  }, {} as Record<string, DraftRecord[]>);
 
   const handleSearchChange = (field: keyof SearchFilters, value: string) => {
     setSearchFilters(prev => ({ ...prev, [field]: value }));
@@ -1502,9 +1642,45 @@ function App() {
             <h2>出土物坐标采集</h2>
           </div>
           <div className="form-actions">
+            {indexedDBSupported && (
+              <>
+                <button 
+                  className="draft-action-btn"
+                  onClick={() => setShowDraftBox(!showDraftBox)}
+                >
+                  📝 草稿箱 ({drafts.length})
+                </button>
+                <button 
+                  className="draft-action-btn"
+                  onClick={handleSaveDraft}
+                >
+                  💾 保存草稿
+                </button>
+                {currentDraftId && (
+                  <button onClick={handleNewFromDraft}>
+                    ✨ 新建（不覆盖草稿）
+                  </button>
+                )}
+              </>
+            )}
             <button onClick={handleClear}>清空表单</button>
             <button className="primary-action" onClick={handleSubmit}>新增记录</button>
           </div>
+          {draftSaveMessage && (
+            <div className={`draft-message ${draftSaveMessage.includes("成功") ? "draft-message-success" : "draft-message-error"}`}>
+              {draftSaveMessage}
+            </div>
+          )}
+          {currentDraftId && (
+            <div className="draft-editing-indicator">
+              正在编辑草稿：<strong>{draftName}</strong> · 保存时将更新此草稿
+            </div>
+          )}
+          {!indexedDBSupported && (
+            <div className="draft-message draft-message-warn">
+              ⚠️ 当前浏览器不支持 IndexedDB，离线草稿功能不可用。建议使用现代浏览器（Chrome、Firefox、Safari、Edge）以获得完整功能体验。
+            </div>
+          )}
         </div>
         <div className="field-grid">
           <label>
@@ -1581,6 +1757,171 @@ function App() {
           </label>
         </div>
       </section>
+
+      {showDraftBox && indexedDBSupported && (
+        <section className="panel draft-box-section">
+          <div className="section-heading">
+            <div>
+              <p>离线存储</p>
+              <h2>草稿箱</h2>
+            </div>
+            <div className="form-actions">
+              {drafts.length > 0 && (
+                <button onClick={handleClearAllDrafts} className="danger-btn">
+                  🗑️ 清空所有草稿
+                </button>
+              )}
+              <button onClick={() => setShowDraftBox(false)}>
+                关闭
+              </button>
+            </div>
+          </div>
+          
+          <div className="draft-box-info">
+            <p>
+              💡 <strong>使用提示：</strong>草稿保存在浏览器本地（IndexedDB），刷新页面后仍然存在。
+              同一探方可以保存多份草稿，按保存时间排序显示。
+            </p>
+          </div>
+
+          {drafts.length === 0 ? (
+            <div className="empty-state-detail">
+              <p className="empty-state">暂无草稿</p>
+              <p className="empty-state-hint">在上方表单填写内容后点击"保存草稿"按钮即可保存</p>
+            </div>
+          ) : (
+            <div className="draft-groups">
+              {Object.entries(groupedDrafts).map(([trench, trenchDrafts]) => (
+                <div key={trench} className="draft-group">
+                  <div className="draft-group-header">
+                    <h3 className="draft-group-title">
+                      <span className="trench-icon">📐</span>
+                      {trench}
+                      <span className="draft-count-badge">{trenchDrafts.length} 份草稿</span>
+                    </h3>
+                  </div>
+                  <div className="draft-list">
+                    {trenchDrafts.map((draft, index) => (
+                      <article 
+                        key={draft.id} 
+                        className={`draft-card ${currentDraftId === draft.id ? "draft-card-active" : ""}`}
+                      >
+                        <div className="draft-card-header">
+                          <div className="draft-card-title">
+                            <span className="draft-index">{String(index + 1).padStart(2, "0")}</span>
+                            <strong>{draft.draftName}</strong>
+                            {currentDraftId === draft.id && (
+                              <span className="draft-editing-badge">编辑中</span>
+                            )}
+                          </div>
+                          <div className="draft-card-time">
+                            {draft.savedAt}
+                          </div>
+                        </div>
+                        
+                        <div className="draft-card-summary">
+                          {draft.stratum && <span className="draft-summary-item">地层: {draft.stratum}</span>}
+                          {draft.artifactType && <span className="draft-summary-item">类型: {draft.artifactType}</span>}
+                          {draft.eCoordinate && draft.nCoordinate && (
+                            <span className="draft-summary-item">坐标: E{draft.eCoordinate} N{draft.nCoordinate}</span>
+                          )}
+                          {draft.depth && <span className="draft-summary-item">深度: {draft.depth}</span>}
+                        </div>
+                        
+                        {draft.remarks && (
+                          <p className="draft-card-remarks">
+                            <span>备注：</span>{draft.remarks}
+                          </p>
+                        )}
+                        
+                        <div className="draft-card-actions">
+                          <button 
+                            className="action-btn action-restore"
+                            onClick={() => handleRestoreDraft(draft)}
+                          >
+                            ✏️ 恢复编辑
+                          </button>
+                          {draftDeleteConfirm === draft.id ? (
+                            <span className="delete-confirm-group">
+                              <span className="confirm-text">确定删除？</span>
+                              <button 
+                                className="action-btn action-delete-confirm"
+                                onClick={() => handleDeleteDraft(draft.id)}
+                              >
+                                确定
+                              </button>
+                              <button 
+                                className="action-btn action-cancel"
+                                onClick={() => setDraftDeleteConfirm(null)}
+                              >
+                                取消
+                              </button>
+                            </span>
+                          ) : (
+                            <button 
+                              className="action-btn action-delete"
+                              onClick={() => setDraftDeleteConfirm(draft.id)}
+                            >
+                              🗑️ 删除
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {showSaveDraftModal && indexedDBSupported && (
+        <div className="review-modal-overlay" onClick={() => setShowSaveDraftModal(false)}>
+          <div className="review-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="review-modal-header">
+              <h3>保存草稿</h3>
+              <button 
+                className="modal-close-btn" 
+                onClick={() => setShowSaveDraftModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="review-modal-body">
+              <div className="review-record-summary">
+                <p><strong>探方：</strong>{formData.trenchNumber || "未填写"}</p>
+                <p><strong>地层：</strong>{formData.stratum || "未填写"}</p>
+                <p><strong>类型：</strong>{formData.artifactType || "未填写"}</p>
+                <p><strong>坐标：</strong>E{formData.eCoordinate || "—"} N{formData.nCoordinate || "—"}</p>
+              </div>
+              <label className="full-width">
+                <span>草稿名称 <span className="required">*</span></span>
+                <input
+                  placeholder="给这份草稿起个名字，方便以后识别"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+            </div>
+            <div className="review-modal-footer">
+              <button 
+                className="modal-cancel-btn"
+                onClick={() => setShowSaveDraftModal(false)}
+              >
+                取消
+              </button>
+              <button 
+                className="modal-approve-btn"
+                onClick={confirmSaveDraft}
+              >
+                {currentDraftId ? "更新草稿" : "保存草稿"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="panel batch-import-section">
         <div className="section-heading">
