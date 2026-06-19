@@ -8,6 +8,7 @@ import {
   deleteDraft as deleteDraftFromDB,
   clearAllDrafts as clearAllDraftsFromDB,
 } from "./indexedDB";
+import ExportModule from "./export/ExportModule";
 
 type ReviewStatus = "pending" | "approved" | "rejected" | "archived";
 type UserRole = "excavator" | "leader" | "archivist";
@@ -2860,6 +2861,23 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
           </div>
         </div>
       )}
+
+      <ExportModule
+        project={{
+          id: project.id,
+          title: project.title,
+          subtitle: project.subtitle,
+          domain: project.domain,
+          metrics: project.metrics,
+          filters: project.filters,
+        }}
+        searchFilters={searchFilters}
+        hasActiveFilters={hasActiveFilters}
+        artifactRecords={artifactRecords}
+        stratumRelations={stratumRelations}
+        excavationLogs={excavationLogs}
+        currentRole={currentRole}
+      />
     </main>
   );
 }
