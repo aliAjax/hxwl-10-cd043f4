@@ -25,6 +25,9 @@ import {
   type StratumRelationFormErrors,
   type BatchImportRow,
   type ParsedImportResult,
+  type ValidatedBatchImportRow,
+  type DuplicateCheckResult,
+  type ImportResultSummary,
   type DraftRecord,
   type AnomalyType,
   type AnomalyRecord,
@@ -1290,6 +1293,7 @@ function App() {
   const [batchCsvText, setBatchCsvText] = useState<string>("");
   const [batchParseResult, setBatchParseResult] = useState<ParsedImportResult | null>(null);
   const [batchParseError, setBatchParseError] = useState<string>("");
+  const [importResultSummary, setImportResultSummary] = useState<ImportResultSummary | null>(null);
 
   const [indexedDBSupported, setIndexedDBSupported] = useState<boolean>(true);
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
@@ -2098,9 +2102,113 @@ function App() {
     return errors;
   };
 
+  const normalizeValue = (val: string): string => {
+    return val.trim().toLowerCase().replace(/\s+/g, "");
+  };
+
+  const normalizeDepth = (depth: string): string => {
+    const clean = depth.trim().toLowerCase();
+    const numMatch = clean.match(/-?\d+(\.\d+)?/);
+    if (numMatch) {
+      const num = parseFloat(numMatch[0]);
+      return num.toFixed(4);
+    }
+    return normalizeValue(depth);
+  };
+
+  const normalizeCoordinate = (coord: string): { eNorm: string; nNorm: string } => {
+    const { eCoordinate, nCoordinate } = parseCoordinate(coord);
+    const eNorm = eCoordinate ? parseFloat(eCoordinate).toFixed(4) : normalizeValue(coord);
+    const nNorm = nCoordinate ? parseFloat(nCoordinate).toFixed(4) : normalizeValue(coord);
+    return { eNorm, nNorm };
+  };
+
+  const checkDuplicate = (
+    row: BatchImportRow,
+    existingRecords: ArtifactRecord[],
+    batchProcessedRows: ValidatedBatchImportRow[]
+  ): DuplicateCheckResult => {
+    const reasons: string[] = [];
+    let duplicateWithExisting = false;
+    let duplicateWithBatch = false;
+    let existingRecordId: number | undefined;
+
+    const rowTrench = normalizeValue(row.trenchNumber);
+    const rowStratum = normalizeValue(row.stratum);
+    const rowDepth = normalizeDepth(row.depth);
+    const rowType = normalizeValue(row.artifactType);
+    const { eNorm: rowENorm, nNorm: rowNNorm } = normalizeCoordinate(row.coordinatePoint);
+
+    for (const record of existingRecords) {
+      const recTrench = normalizeValue(record.trenchNumber);
+      const recStratum = normalizeValue(record.stratum);
+      const recDepth = normalizeDepth(record.depth);
+      const recType = normalizeValue(record.artifactType);
+      const recENorm = record.eCoordinate ? parseFloat(record.eCoordinate).toFixed(4) : "";
+      const recNNorm = record.nCoordinate ? parseFloat(record.nCoordinate).toFixed(4) : "";
+
+      const matchTrench = rowTrench === recTrench;
+      const matchStratum = rowStratum === recStratum;
+      const matchCoord = rowENorm === recENorm && rowNNorm === recNNorm;
+      const matchDepth = rowDepth === recDepth;
+      const matchType = rowType === recType;
+
+      if (matchTrench && matchStratum && matchCoord && matchDepth && matchType) {
+        duplicateWithExisting = true;
+        existingRecordId = record.id;
+        reasons.push(`与系统现有记录 #${record.id} 重复（探方、地层、坐标、深度、类型均相同）`);
+        break;
+      }
+
+      if (matchTrench && matchStratum && matchCoord && matchType) {
+        duplicateWithExisting = true;
+        existingRecordId = record.id;
+        reasons.push(`疑似与系统现有记录 #${record.id} 重复（探方、地层、坐标、类型相同，深度不同）`);
+        break;
+      }
+    }
+
+    if (!duplicateWithExisting) {
+      for (const processedRow of batchProcessedRows) {
+        const procTrench = normalizeValue(processedRow.trenchNumber);
+        const procStratum = normalizeValue(processedRow.stratum);
+        const procDepth = normalizeDepth(processedRow.depth);
+        const procType = normalizeValue(processedRow.artifactType);
+        const { eNorm: procENorm, nNorm: procNNorm } = normalizeCoordinate(processedRow.coordinatePoint);
+
+        const matchTrench = rowTrench === procTrench;
+        const matchStratum = rowStratum === procStratum;
+        const matchCoord = rowENorm === procENorm && rowNNorm === procNNorm;
+        const matchDepth = rowDepth === procDepth;
+        const matchType = rowType === procType;
+
+        if (matchTrench && matchStratum && matchCoord && matchDepth && matchType) {
+          duplicateWithBatch = true;
+          reasons.push(`与本次导入第 ${processedRow.rowNumber} 行重复（探方、地层、坐标、深度、类型均相同）`);
+          break;
+        }
+
+        if (matchTrench && matchStratum && matchCoord && matchType) {
+          duplicateWithBatch = true;
+          reasons.push(`疑似与本次导入第 ${processedRow.rowNumber} 行重复（探方、地层、坐标、类型相同，深度不同）`);
+          break;
+        }
+      }
+    }
+
+    return {
+      isDuplicate: reasons.length > 0,
+      duplicateReasons: reasons,
+      duplicateWithExisting,
+      duplicateWithBatch,
+      existingRecordId,
+    };
+  };
+
   const handleBatchParse = () => {
     setBatchParseError("");
     setBatchParseResult(null);
+    setImportResultSummary(null);
     const text = batchCsvText.trim();
     if (!text) {
       setBatchParseError("请粘贴CSV文本内容");
@@ -2125,8 +2233,11 @@ function App() {
     mappedHeaders.forEach((key, idx) => {
       if (key) headerIndexMap[key] = idx;
     });
-    const validRows: BatchImportRow[] = [];
+    const validRows: ValidatedBatchImportRow[] = [];
+    const duplicateRows: ValidatedBatchImportRow[] = [];
     const errorRows: { row: BatchImportRow; errors: string[] }[] = [];
+    const processedForDuplicate: ValidatedBatchImportRow[] = [];
+
     for (let i = 1; i < lines.length; i++) {
       const rawValues = parseCsvLine(lines[i]);
       const rowNumber = i + 1;
@@ -2142,18 +2253,70 @@ function App() {
       };
       const errors = validateBatchRow(row);
       if (errors.length === 0) {
-        validRows.push(row);
+        const duplicateCheck = checkDuplicate(row, artifactRecords, processedForDuplicate);
+        const validatedRow: ValidatedBatchImportRow = {
+          ...row,
+          duplicateCheck,
+          skipImport: duplicateCheck.isDuplicate,
+        };
+        if (duplicateCheck.isDuplicate) {
+          duplicateRows.push(validatedRow);
+        } else {
+          validRows.push(validatedRow);
+        }
+        processedForDuplicate.push(validatedRow);
       } else {
         errorRows.push({ row, errors });
       }
     }
-    setBatchParseResult({ validRows, errorRows });
+    setBatchParseResult({ validRows, duplicateRows, errorRows });
+  };
+
+  const toggleSkipDuplicate = (rowNumber: number) => {
+    if (!batchParseResult) return;
+    setBatchParseResult(prev => {
+      if (!prev) return prev;
+      const updateRow = (rows: ValidatedBatchImportRow[]): ValidatedBatchImportRow[] =>
+        rows.map(r => r.rowNumber === rowNumber ? { ...r, skipImport: !r.skipImport } : r);
+      return {
+        ...prev,
+        validRows: updateRow(prev.validRows),
+        duplicateRows: updateRow(prev.duplicateRows),
+      };
+    });
+  };
+
+  const setSkipAllDuplicates = (skip: boolean) => {
+    if (!batchParseResult) return;
+    setBatchParseResult(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        duplicateRows: prev.duplicateRows.map(r => ({ ...r, skipImport: skip })),
+      };
+    });
   };
 
   const handleBatchConfirm = () => {
-    if (!batchParseResult || batchParseResult.validRows.length === 0) return;
+    if (!batchParseResult) return;
+    const { validRows, duplicateRows, errorRows } = batchParseResult;
+    const allValidRows = [...validRows, ...duplicateRows];
+    const rowsToImport = allValidRows.filter(r => !r.skipImport);
+    const skippedCount = allValidRows.filter(r => r.skipImport).length;
+    const duplicateCount = duplicateRows.length;
+
+    if (rowsToImport.length === 0) {
+      setImportResultSummary({
+        addedCount: 0,
+        skippedCount,
+        errorCount: errorRows.length,
+        duplicateCount,
+      });
+      return;
+    }
+
     const now = new Date().toLocaleString("zh-CN");
-    const newRecords: ArtifactRecord[] = batchParseResult.validRows.map((row, idx) => {
+    const newRecords: ArtifactRecord[] = rowsToImport.map((row, idx) => {
       const coords = parseCoordinate(row.coordinatePoint);
       return {
         id: Date.now() + idx,
@@ -2173,13 +2336,22 @@ function App() {
       };
     });
     setArtifactRecords(prev => [...newRecords, ...prev]);
-    handleBatchClear();
+    setImportResultSummary({
+      addedCount: newRecords.length,
+      skippedCount,
+      errorCount: errorRows.length,
+      duplicateCount,
+    });
+    setBatchParseResult(null);
+    setBatchCsvText("");
+    setBatchParseError("");
   };
 
   const handleBatchClear = () => {
     setBatchCsvText("");
     setBatchParseResult(null);
     setBatchParseError("");
+    setImportResultSummary(null);
   };
 
   const filterProjectRecords = (records: string[][]): string[][] => {
@@ -2779,6 +2951,44 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
             <span>{batchParseError}</span>
           </div>
         )}
+        {importResultSummary && (
+          <div className="batch-result-summary">
+            <div className="batch-result-header">
+              <h3>📊 导入结果</h3>
+            </div>
+            <div className="batch-result-stats">
+              <div className="result-stat result-added">
+                <span className="result-count">{importResultSummary.addedCount}</span>
+                <span className="result-label">条新增</span>
+              </div>
+              {importResultSummary.skippedCount > 0 && (
+                <div className="result-stat result-skipped">
+                  <span className="result-count">{importResultSummary.skippedCount}</span>
+                  <span className="result-label">条跳过</span>
+                </div>
+              )}
+              {importResultSummary.duplicateCount > 0 && (
+                <div className="result-stat result-duplicate">
+                  <span className="result-count">{importResultSummary.duplicateCount}</span>
+                  <span className="result-label">条重复</span>
+                </div>
+              )}
+              {importResultSummary.errorCount > 0 && (
+                <div className="result-stat result-error">
+                  <span className="result-count">{importResultSummary.errorCount}</span>
+                  <span className="result-label">条错误</span>
+                </div>
+              )}
+            </div>
+            <div className="batch-result-detail">
+              <p>
+                成功导入 <strong>{importResultSummary.addedCount}</strong> 条记录。
+                {importResultSummary.skippedCount > 0 && ` 跳过 ${importResultSummary.skippedCount} 条重复记录。`}
+                {importResultSummary.errorCount > 0 && ` ${importResultSummary.errorCount} 条因格式错误未能导入。`}
+              </p>
+            </div>
+          </div>
+        )}
         {batchParseResult && (
           <div className="batch-preview-area">
             <div className="batch-summary">
@@ -2786,18 +2996,34 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                 <span className="summary-count">{batchParseResult.validRows.length}</span>
                 <span className="summary-label">条有效记录</span>
               </div>
+              {batchParseResult.duplicateRows.length > 0 && (
+                <div className="summary-item summary-duplicate">
+                  <span className="summary-count">{batchParseResult.duplicateRows.length}</span>
+                  <span className="summary-label">条疑似重复</span>
+                </div>
+              )}
               <div className="summary-item summary-error">
                 <span className="summary-count">{batchParseResult.errorRows.length}</span>
                 <span className="summary-label">条错误记录</span>
               </div>
               <div className="summary-actions">
-                <button
-                  className="primary-action batch-confirm-btn"
-                  onClick={handleBatchConfirm}
-                  disabled={batchParseResult.validRows.length === 0}
-                >
-                  确认导入 {batchParseResult.validRows.length} 条有效记录
-                </button>
+                {(() => {
+                  const allRows = [...batchParseResult.validRows, ...batchParseResult.duplicateRows];
+                  const importCount = allRows.filter(r => !r.skipImport).length;
+                  const skipCount = allRows.filter(r => r.skipImport).length;
+                  const btnLabel = skipCount > 0
+                    ? `确认导入 ${importCount} 条（跳过 ${skipCount} 条重复）`
+                    : `确认导入 ${importCount} 条有效记录`;
+                  return (
+                    <button
+                      className="primary-action batch-confirm-btn"
+                      onClick={handleBatchConfirm}
+                      disabled={importCount === 0}
+                    >
+                      {btnLabel}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
             {batchParseResult.validRows.length > 0 && (
@@ -2831,6 +3057,85 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
                             <span className="type-badge">{row.artifactType}</span>
                           </td>
                           <td className="qty-cell">{row.quantity}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {batchParseResult.duplicateRows.length > 0 && (
+              <div className="preview-table-wrapper">
+                <div className="preview-table-title duplicate-table-title">
+                  <h3 className="duplicate-title">⚠ 疑似重复记录</h3>
+                  <div className="duplicate-bulk-actions">
+                    <span className="duplicate-hint">默认将跳过，可选择是否仍然导入：</span>
+                    <button
+                      className="bulk-action-btn"
+                      onClick={() => setSkipAllDuplicates(true)}
+                    >
+                      全部跳过
+                    </button>
+                    <button
+                      className="bulk-action-btn bulk-action-force"
+                      onClick={() => setSkipAllDuplicates(false)}
+                    >
+                      全部仍然导入
+                    </button>
+                  </div>
+                </div>
+                <div className="table-scroll">
+                  <table className="preview-table preview-table-duplicate">
+                    <thead>
+                      <tr>
+                        <th className="col-skip">
+                          跳过
+                        </th>
+                        <th>行号</th>
+                        {batchImportHeaders.map(h => (
+                          <th key={h.key}>{h.label}</th>
+                        ))}
+                        <th>重复原因</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchParseResult.duplicateRows.map((row) => (
+                        <tr
+                          key={`dup-${row.rowNumber}`}
+                          className={row.skipImport ? "row-skipped" : "row-force-import"}
+                        >
+                          <td className="col-skip">
+                            <label className="skip-checkbox-label">
+                              <input
+                                type="checkbox"
+                                checked={row.skipImport}
+                                onChange={() => toggleSkipDuplicate(row.rowNumber)}
+                              />
+                              <span>{row.skipImport ? "跳过" : "导入"}</span>
+                            </label>
+                          </td>
+                          <td className="row-num row-num-duplicate">{row.rowNumber}</td>
+                          <td>{row.trenchNumber}</td>
+                          <td>{row.stratum}</td>
+                          <td>{row.relicUnit || <span className="cell-muted">—</span>}</td>
+                          <td>{row.coordinatePoint}</td>
+                          <td>{row.depth}</td>
+                          <td>
+                            <span className="type-badge">{row.artifactType}</span>
+                          </td>
+                          <td className="qty-cell">{row.quantity}</td>
+                          <td className="duplicate-cell">
+                            <ul>
+                              {row.duplicateCheck.duplicateReasons.map((reason, idx) => (
+                                <li key={idx}>{reason}</li>
+                              ))}
+                            </ul>
+                            {row.skipImport ? (
+                              <span className="status-tag status-skip">将跳过</span>
+                            ) : (
+                              <span className="status-tag status-force">将仍然导入</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

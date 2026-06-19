@@ -118,9 +118,30 @@ export interface BatchImportRow {
   quantity: string;
 }
 
+export interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  duplicateReasons: string[];
+  duplicateWithExisting?: boolean;
+  duplicateWithBatch?: boolean;
+  existingRecordId?: number;
+}
+
+export interface ValidatedBatchImportRow extends BatchImportRow {
+  duplicateCheck: DuplicateCheckResult;
+  skipImport: boolean;
+}
+
 export interface ParsedImportResult {
-  validRows: BatchImportRow[];
+  validRows: ValidatedBatchImportRow[];
+  duplicateRows: ValidatedBatchImportRow[];
   errorRows: { row: BatchImportRow; errors: string[] }[];
+}
+
+export interface ImportResultSummary {
+  addedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  duplicateCount: number;
 }
 
 // —— CSV 批量导入表头配置 ——
