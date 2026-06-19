@@ -41,10 +41,12 @@ export interface ArtifactRecord {
 export interface ArtifactFormData {
   trenchNumber: string;
   stratum: string;
+  relicUnit: string;
   artifactType: string;
   eCoordinate: string;
   nCoordinate: string;
   depth: string;
+  quantity: string;
   remarks: string;
 }
 
@@ -143,10 +145,12 @@ export interface DraftRecord {
   id: number;
   trenchNumber: string;
   stratum: string;
+  relicUnit: string;
   artifactType: string;
   eCoordinate: string;
   nCoordinate: string;
   depth: string;
+  quantity: string;
   remarks: string;
   savedAt: string;
   draftName: string;

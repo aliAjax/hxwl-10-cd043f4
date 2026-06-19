@@ -1248,10 +1248,12 @@ function App() {
   const [formData, setFormData] = useState<ArtifactFormData>({
     trenchNumber: "",
     stratum: "",
+    relicUnit: "",
     artifactType: "",
     eCoordinate: "",
     nCoordinate: "",
     depth: "",
+    quantity: "",
     remarks: ""
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -1439,7 +1441,15 @@ function App() {
     const now = new Date().toLocaleString("zh-CN");
     const newRecord: ArtifactRecord = {
       id: Date.now(),
-      ...formData,
+      trenchNumber: formData.trenchNumber,
+      stratum: formData.stratum,
+      relicUnit: formData.relicUnit.trim() || undefined,
+      artifactType: formData.artifactType,
+      eCoordinate: formData.eCoordinate,
+      nCoordinate: formData.nCoordinate,
+      depth: formData.depth,
+      quantity: formData.quantity.trim() || undefined,
+      remarks: formData.remarks,
       createdAt: now,
       status: "pending",
       submittedBy: `${roleNames[currentRole]}-当前用户`,
@@ -1524,10 +1534,44 @@ function App() {
     setFormData({
       trenchNumber: "",
       stratum: "",
+      relicUnit: "",
       artifactType: "",
       eCoordinate: "",
       nCoordinate: "",
       depth: "",
+      quantity: "",
+      remarks: ""
+    });
+    setFormErrors({});
+    setCurrentDraftId(null);
+    setDraftName("");
+  };
+
+  const handleCopyLastRecord = () => {
+    if (artifactRecords.length === 0) {
+      return;
+    }
+    const lastRecord = artifactRecords[0];
+
+    const hasExistingContent = Object.values(formData).some(v => v.trim() !== "");
+    if (hasExistingContent) {
+      const confirmed = window.confirm(
+        "当前表单已有内容，确定要覆盖为上一条记录的信息吗？\n\n将带入：探方、地层、遗迹单位、深度、坐标\n将保留为空：出土物类型、数量、备注"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setFormData({
+      trenchNumber: lastRecord.trenchNumber,
+      stratum: lastRecord.stratum,
+      relicUnit: lastRecord.relicUnit || "",
+      artifactType: "",
+      eCoordinate: lastRecord.eCoordinate,
+      nCoordinate: lastRecord.nCoordinate,
+      depth: lastRecord.depth,
+      quantity: "",
       remarks: ""
     });
     setFormErrors({});
@@ -1576,7 +1620,15 @@ function App() {
     try {
       const id = await saveDraftToDB(
         {
-          ...formData,
+          trenchNumber: formData.trenchNumber,
+          stratum: formData.stratum,
+          relicUnit: formData.relicUnit,
+          artifactType: formData.artifactType,
+          eCoordinate: formData.eCoordinate,
+          nCoordinate: formData.nCoordinate,
+          depth: formData.depth,
+          quantity: formData.quantity,
+          remarks: formData.remarks,
           draftName: draftName.trim() || `${formData.trenchNumber || "未命名"}-${new Date().toLocaleDateString("zh-CN")}`,
         },
         currentDraftId || undefined
@@ -1596,10 +1648,12 @@ function App() {
     setFormData({
       trenchNumber: draft.trenchNumber,
       stratum: draft.stratum,
+      relicUnit: draft.relicUnit || "",
       artifactType: draft.artifactType,
       eCoordinate: draft.eCoordinate,
       nCoordinate: draft.nCoordinate,
       depth: draft.depth,
+      quantity: draft.quantity || "",
       remarks: draft.remarks,
     });
     setCurrentDraftId(draft.id);
@@ -2239,6 +2293,13 @@ function App() {
                 )}
               </>
             )}
+            <button 
+              onClick={handleCopyLastRecord}
+              disabled={artifactRecords.length === 0}
+              title={artifactRecords.length === 0 ? "暂无可复制的记录" : "带入上一条记录的探方、地层、遗迹单位、深度和坐标"}
+            >
+              📋 复制上一条记录
+            </button>
             <button onClick={handleClear}>清空表单</button>
             <button className="primary-action" onClick={handleSubmit}>新增记录</button>
           </div>
@@ -2280,6 +2341,14 @@ function App() {
             {formErrors.stratum && <span className="error-text">{formErrors.stratum}</span>}
           </label>
           <label>
+            <span>遗迹单位</span>
+            <input
+              placeholder="如 H12、F2"
+              value={formData.relicUnit}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange("relicUnit", e.target.value)}
+            />
+          </label>
+          <label>
             <span>出土物类型 <span className="required">*</span></span>
             <select
               value={formData.artifactType}
@@ -2292,6 +2361,14 @@ function App() {
               ))}
             </select>
             {formErrors.artifactType && <span className="error-text">{formErrors.artifactType}</span>}
+          </label>
+          <label>
+            <span>数量</span>
+            <input
+              placeholder="如 12"
+              value={formData.quantity}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange("quantity", e.target.value)}
+            />
           </label>
           <label>
             <span>E坐标 <span className="required">*</span></span>
@@ -2397,7 +2474,9 @@ function App() {
                         
                         <div className="draft-card-summary">
                           {draft.stratum && <span className="draft-summary-item">地层: {draft.stratum}</span>}
+                          {draft.relicUnit && <span className="draft-summary-item">遗迹: {draft.relicUnit}</span>}
                           {draft.artifactType && <span className="draft-summary-item">类型: {draft.artifactType}</span>}
+                          {draft.quantity && <span className="draft-summary-item">数量: {draft.quantity}</span>}
                           {draft.eCoordinate && draft.nCoordinate && (
                             <span className="draft-summary-item">坐标: E{draft.eCoordinate} N{draft.nCoordinate}</span>
                           )}
@@ -2468,8 +2547,11 @@ function App() {
               <div className="review-record-summary">
                 <p><strong>探方：</strong>{formData.trenchNumber || "未填写"}</p>
                 <p><strong>地层：</strong>{formData.stratum || "未填写"}</p>
+                <p><strong>遗迹单位：</strong>{formData.relicUnit || "未填写"}</p>
                 <p><strong>类型：</strong>{formData.artifactType || "未填写"}</p>
+                <p><strong>数量：</strong>{formData.quantity || "未填写"}</p>
                 <p><strong>坐标：</strong>E{formData.eCoordinate || "—"} N{formData.nCoordinate || "—"}</p>
+                <p><strong>深度：</strong>{formData.depth || "未填写"}</p>
               </div>
               <label className="full-width">
                 <span>草稿名称 <span className="required">*</span></span>
@@ -3389,7 +3471,13 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
               <div className="review-record-summary">
                 <p><strong>探方：</strong>{reviewModalRecord.trenchNumber}</p>
                 <p><strong>地层：</strong>{reviewModalRecord.stratum}</p>
+                {reviewModalRecord.relicUnit && (
+                  <p><strong>遗迹单位：</strong>{reviewModalRecord.relicUnit}</p>
+                )}
                 <p><strong>类型：</strong>{reviewModalRecord.artifactType}</p>
+                {reviewModalRecord.quantity && (
+                  <p><strong>数量：</strong>{reviewModalRecord.quantity}</p>
+                )}
                 <p><strong>坐标：</strong>E{reviewModalRecord.eCoordinate} N{reviewModalRecord.nCoordinate}</p>
                 <p><strong>深度：</strong>{reviewModalRecord.depth}</p>
                 {reviewModalRecord.remarks && (
