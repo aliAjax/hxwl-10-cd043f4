@@ -1157,7 +1157,6 @@ const generateRoleViewData = (
     summary = [
       { label: "待归档记录", value: pendingArchives.length, trend: pendingArchives.length > 10 ? "up" : pendingArchives.length === 0 ? "down" : "stable" },
       { label: "已通过待归档", value: archivedCount, trend: archivedCount > 10 ? "up" : archivedCount === 0 ? "down" : "stable" },
-      { label: "未整理记录", value: anomalies.length > 0 ? 0 : 0, trend: "stable" },
     ];
   }
 
