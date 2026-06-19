@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 
 import { runConsistencyChecks, filterArtifactsForExport } from "./consistencyChecker";
 import { collectExportData } from "./dataCollector";
@@ -109,6 +109,12 @@ export default function ExportModule(props: ExportModuleProps) {
       setCheckStatus("checked");
     }, 300);
   }, [buildCollectionInput, exportOptions]);
+
+  useEffect(() => {
+    if (props.recheckToken !== undefined && props.recheckToken > 0) {
+      handleRunChecks();
+    }
+  }, [props.recheckToken, handleRunChecks]);
 
   const blockingIssues = useMemo<ConsistencyIssue[]>(
     () => report?.issues.filter((i) => i.severity === "blocking") || [],

@@ -1315,10 +1315,35 @@ function App() {
   const [draftFilterKeyword, setDraftFilterKeyword] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string>("");
 
+  const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
+  const [editingRelationContext, setEditingRelationContext] = useState<{
+    stratumA: string;
+    stratumB: string;
+    relationId?: number;
+    action: "fix_duplicate";
+  } | null>(null);
+  const [recheckToken, setRecheckToken] = useState<number>(0);
+  const [autoScrollBackToExport, setAutoScrollBackToExport] = useState<boolean>(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 4000);
   };
+
+  useEffect(() => {
+    if (autoScrollBackToExport) {
+      const timer = setTimeout(() => {
+        const target = document.querySelector(".export-module-section");
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          target.classList.add("export-module-flash");
+          setTimeout(() => target.classList.remove("export-module-flash"), 2000);
+        }
+        setAutoScrollBackToExport(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoScrollBackToExport]);
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -1481,24 +1506,56 @@ function App() {
       return;
     }
     const now = new Date().toLocaleString("zh-CN");
-    const newRecord: ArtifactRecord = {
-      id: Date.now(),
-      trenchNumber: formData.trenchNumber,
-      stratum: formData.stratum,
-      relicUnit: formData.relicUnit.trim() || undefined,
-      artifactType: formData.artifactType,
-      eCoordinate: formData.eCoordinate,
-      nCoordinate: formData.nCoordinate,
-      depth: formData.depth,
-      quantity: formData.quantity.trim() || undefined,
-      remarks: formData.remarks,
-      createdAt: now,
-      status: "pending",
-      submittedBy: `${roleNames[currentRole]}-当前用户`,
-      submittedAt: now
-    };
-    setArtifactRecords(prev => [newRecord, ...prev]);
-    handleClear();
+
+    if (editingRecordId !== null) {
+      const originalRecord = artifactRecords.find(r => r.id === editingRecordId);
+      setArtifactRecords(prev => prev.map(r => {
+        if (r.id === editingRecordId) {
+          return {
+            ...r,
+            trenchNumber: formData.trenchNumber,
+            stratum: formData.stratum,
+            relicUnit: formData.relicUnit.trim() || undefined,
+            artifactType: formData.artifactType,
+            eCoordinate: formData.eCoordinate,
+            nCoordinate: formData.nCoordinate,
+            depth: formData.depth,
+            quantity: formData.quantity.trim() || undefined,
+            remarks: formData.remarks,
+            submittedAt: originalRecord?.status === "pending" ? now : r.submittedAt,
+            status: originalRecord?.status === "rejected" ? "pending" : r.status,
+            reviewReason: originalRecord?.status === "rejected" ? undefined : r.reviewReason,
+            reviewedBy: originalRecord?.status === "rejected" ? undefined : r.reviewedBy,
+            reviewedAt: originalRecord?.status === "rejected" ? undefined : r.reviewedAt,
+          };
+        }
+        return r;
+      }));
+      const updatedRecord = artifactRecords.find(r => r.id === editingRecordId);
+      showToast(`已保存记录 #${editingRecordId} 的修改${updatedRecord?.status === "rejected" ? "，已重新提交待审核" : ""}`);
+      setRecheckToken(prev => prev + 1);
+      setAutoScrollBackToExport(true);
+      handleClear();
+    } else {
+      const newRecord: ArtifactRecord = {
+        id: Date.now(),
+        trenchNumber: formData.trenchNumber,
+        stratum: formData.stratum,
+        relicUnit: formData.relicUnit.trim() || undefined,
+        artifactType: formData.artifactType,
+        eCoordinate: formData.eCoordinate,
+        nCoordinate: formData.nCoordinate,
+        depth: formData.depth,
+        quantity: formData.quantity.trim() || undefined,
+        remarks: formData.remarks,
+        createdAt: now,
+        status: "pending",
+        submittedBy: `${roleNames[currentRole]}-当前用户`,
+        submittedAt: now
+      };
+      setArtifactRecords(prev => [newRecord, ...prev]);
+      handleClear();
+    }
   };
 
   const handleApprove = (id: number) => {
@@ -1517,6 +1574,8 @@ function App() {
     }));
     setReviewModalRecord(null);
     setReviewReason("");
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const handleReject = (id: number) => {
@@ -1538,6 +1597,8 @@ function App() {
     }));
     setReviewModalRecord(null);
     setReviewReason("");
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const handleArchive = (id: number) => {
@@ -1553,6 +1614,8 @@ function App() {
       }
       return r;
     }));
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const handleResubmit = (id: number) => {
@@ -1570,6 +1633,8 @@ function App() {
       }
       return r;
     }));
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const handleToggleSelect = (id: number) => {
@@ -1634,6 +1699,8 @@ function App() {
     setSelectedRecordIds(new Set());
     setShowBatchReviewModal(false);
     setBatchReviewReason("");
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const confirmBatchReject = () => {
@@ -1659,6 +1726,8 @@ function App() {
     setSelectedRecordIds(new Set());
     setShowBatchReviewModal(false);
     setBatchReviewReason("");
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const handleClear = () => {
@@ -1676,6 +1745,9 @@ function App() {
     setFormErrors({});
     setCurrentDraftId(null);
     setDraftName("");
+    setEditingRecordId(null);
+    setEditingRelationContext(null);
+    setAutoScrollBackToExport(false);
   };
 
   const handleCopyLastRecord = () => {
@@ -2107,15 +2179,36 @@ function App() {
     if (!validateRelationForm()) {
       return;
     }
-    const newRelation: StratumRelation = {
-      id: Date.now(),
-      stratumA: relationFormData.stratumA.trim(),
-      stratumB: relationFormData.stratumB.trim(),
-      relationType: relationFormData.relationType as RelationType,
-      createdAt: new Date().toLocaleString("zh-CN")
-    };
-    setStratumRelations(prev => [newRelation, ...prev]);
-    handleRelationClear();
+    const now = new Date().toLocaleString("zh-CN");
+
+    if (editingRelationContext !== null && editingRelationContext.relationId !== undefined) {
+      const oldRelationId = editingRelationContext.relationId;
+      setStratumRelations(prev => {
+        const filtered = prev.filter(r => r.id !== oldRelationId);
+        const newRelation: StratumRelation = {
+          id: Date.now(),
+          stratumA: relationFormData.stratumA.trim(),
+          stratumB: relationFormData.stratumB.trim(),
+          relationType: relationFormData.relationType as RelationType,
+          createdAt: now
+        };
+        return [newRelation, ...filtered];
+      });
+      showToast(`已更新地层关系（原关系 #${oldRelationId} 已替换）`);
+      setRecheckToken(prev => prev + 1);
+      setAutoScrollBackToExport(true);
+      handleRelationClear();
+    } else {
+      const newRelation: StratumRelation = {
+        id: Date.now(),
+        stratumA: relationFormData.stratumA.trim(),
+        stratumB: relationFormData.stratumB.trim(),
+        relationType: relationFormData.relationType as RelationType,
+        createdAt: now
+      };
+      setStratumRelations(prev => [newRelation, ...prev]);
+      handleRelationClear();
+    }
   };
 
   const handleRelationClear = () => {
@@ -2125,10 +2218,14 @@ function App() {
       relationType: ""
     });
     setRelationFormErrors({});
+    setEditingRelationContext(null);
+    setAutoScrollBackToExport(false);
   };
 
   const handleDeleteRelation = (id: number) => {
     setStratumRelations(prev => prev.filter(r => r.id !== id));
+    setRecheckToken(prev => prev + 1);
+    setAutoScrollBackToExport(true);
   };
 
   const parseCsvLine = (line: string): string[] => {
@@ -2639,6 +2736,8 @@ function App() {
         return;
       }
       setCurrentRole("excavator");
+      setEditingRecordId(action.recordId);
+      setEditingRelationContext(null);
       setFormData({
         trenchNumber: record.trenchNumber,
         stratum: record.stratum,
@@ -2678,7 +2777,7 @@ function App() {
           }, 500);
         }
       }, 100);
-      showToast(`已定位到记录 #${action.recordId}，请修复坐标信息`);
+      showToast(`已进入编辑模式，正在修改记录 #${action.recordId} 的坐标信息`);
     } else if (action.type === "fix_trench_number") {
       const record = artifactRecords.find(r => r.id === action.recordId);
       if (!record) {
@@ -2686,6 +2785,8 @@ function App() {
         return;
       }
       setCurrentRole("excavator");
+      setEditingRecordId(action.recordId);
+      setEditingRelationContext(null);
       setFormData({
         trenchNumber: record.trenchNumber,
         stratum: record.stratum,
@@ -2721,7 +2822,7 @@ function App() {
           }, 500);
         }
       }, 100);
-      showToast(`已定位到记录 #${action.recordId}，请补充探方编号`);
+      showToast(`已进入编辑模式，正在修改记录 #${action.recordId} 的探方编号`);
     } else if (action.type === "review_record") {
       const record = artifactRecords.find(r => r.id === action.recordId);
       if (!record) {
@@ -2729,6 +2830,8 @@ function App() {
         return;
       }
       setCurrentRole("leader");
+      setEditingRecordId(null);
+      setEditingRelationContext(null);
       setStatusFilter("pending");
       setSearchFilters({
         trenchNumber: action.trenchNumber || record.trenchNumber,
@@ -2753,6 +2856,13 @@ function App() {
       showToast(`已定位到待审核记录 #${action.recordId}，请进行审核操作`);
     } else if (action.type === "fix_duplicate_relation") {
       setCurrentRole("leader");
+      setEditingRecordId(null);
+      setEditingRelationContext({
+        stratumA: action.stratumA,
+        stratumB: action.stratumB,
+        relationId: action.relationId,
+        action: "fix_duplicate",
+      });
       setRelationFormData({
         stratumA: action.stratumA,
         stratumB: action.stratumB,
@@ -2765,7 +2875,7 @@ function App() {
           target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       }, 100);
-      showToast(`已定位到地层关系区域，请复核「${action.stratumA} ↔ ${action.stratumB}」的重复关系`);
+      showToast(`已进入关系编辑模式，请处理「${action.stratumA} ↔ ${action.stratumB}」的重复关系`);
     }
   };
 
@@ -2906,19 +3016,25 @@ function App() {
                 )}
               </>
             )}
-            <button 
-              onClick={handleCopyLastRecord}
+            <button onClick={handleCopyLastRecord}
               disabled={artifactRecords.length === 0}
               title={artifactRecords.length === 0 ? "暂无可复制的记录" : "带入上一条记录的探方、地层、遗迹单位、深度和坐标"}
             >
               📋 复制上一条记录
             </button>
             <button onClick={handleClear}>清空表单</button>
-            <button className="primary-action" onClick={handleSubmit}>新增记录</button>
+            <button className="primary-action" onClick={handleSubmit}>
+              {editingRecordId !== null ? "💾 保存修改" : "➕ 新增记录"}
+            </button>
           </div>
           {draftSaveMessage && (
             <div className={`draft-message ${draftSaveMessage.includes("成功") ? "draft-message-success" : "draft-message-error"}`}>
               {draftSaveMessage}
+            </div>
+          )}
+          {editingRecordId !== null && (
+            <div className="record-editing-indicator">
+              ✏️ 正在编辑记录：<strong>#{editingRecordId}</strong> · 保存后将自动返回导出区复查
             </div>
           )}
           {currentDraftId && (
@@ -4227,9 +4343,17 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
           </div>
           <div className="form-actions">
             <button onClick={handleRelationClear}>清空表单</button>
-            <button className="primary-action" onClick={handleRelationSubmit}>新增关系</button>
+            <button className="primary-action" onClick={handleRelationSubmit}>
+              {editingRelationContext !== null ? "💾 保存修改" : "➕ 新增关系"}
+            </button>
           </div>
         </div>
+        {editingRelationContext !== null && (
+          <div className="relation-editing-indicator">
+            🔗 正在处理重复关系：<strong>{editingRelationContext.stratumA} ↔ {editingRelationContext.stratumB}</strong>
+            · 保存后将自动返回导出区复查
+          </div>
+        )}
         <div className="relation-type-hints">
           {relationTypeOptions.map(opt => (
             <div key={opt.value} className={`relation-hint relation-${opt.value}`}>
@@ -4502,23 +4626,26 @@ T0204,第2层,,E1.10 N2.30,0.42m,石器,3</code>
         </div>
       )}
 
-      <ExportModule
-        project={{
-          id: project.id,
-          title: project.title,
-          subtitle: project.subtitle,
-          domain: project.domain,
-          metrics: project.metrics,
-          filters: project.filters,
-        }}
-        searchFilters={searchFilters}
-        hasActiveFilters={hasActiveFilters}
-        artifactRecords={artifactRecords}
-        stratumRelations={stratumRelations}
-        excavationLogs={excavationLogs}
-        currentRole={currentRole}
-        onJumpToFix={handleExportJumpToFix}
-      />
+      <div className="export-module-section">
+        <ExportModule
+          project={{
+            id: project.id,
+            title: project.title,
+            subtitle: project.subtitle,
+            domain: project.domain,
+            metrics: project.metrics,
+            filters: project.filters,
+          }}
+          searchFilters={searchFilters}
+          hasActiveFilters={hasActiveFilters}
+          artifactRecords={artifactRecords}
+          stratumRelations={stratumRelations}
+          excavationLogs={excavationLogs}
+          currentRole={currentRole}
+          onJumpToFix={handleExportJumpToFix}
+          recheckToken={recheckToken}
+        />
+      </div>
 
       {toastMessage && (
         <div className="toast-notification" role="status" aria-live="polite">

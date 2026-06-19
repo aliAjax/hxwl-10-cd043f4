@@ -159,4 +159,5 @@ export interface ExportModuleProps {
   currentRole: UserRole;
   currentRoleLabel?: string;
   onJumpToFix?: (action: RepairChecklistAction) => void;
+  recheckToken?: number;
 }
