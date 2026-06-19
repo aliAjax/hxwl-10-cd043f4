@@ -1298,6 +1298,10 @@ function App() {
   const [draftSaveMessage, setDraftSaveMessage] = useState<string>("");
   const [showSaveDraftModal, setShowSaveDraftModal] = useState<boolean>(false);
   const [draftDeleteConfirm, setDraftDeleteConfirm] = useState<number | null>(null);
+  const [draftFilterTrench, setDraftFilterTrench] = useState<string>("");
+  const [draftFilterStratum, setDraftFilterStratum] = useState<string>("");
+  const [draftFilterType, setDraftFilterType] = useState<string>("");
+  const [draftFilterKeyword, setDraftFilterKeyword] = useState<string>("");
 
   const values = project.metrics.map((metric: string, index: number) => {
     const base = [84, 12, 31, 7][index % 4];
@@ -1701,7 +1705,35 @@ function App() {
     handleSaveDraft();
   };
 
-  const groupedDrafts: Record<string, DraftRecord[]> = drafts.reduce((acc, draft) => {
+  const hasDraftFilters = draftFilterTrench || draftFilterStratum || draftFilterType || draftFilterKeyword;
+
+  const draftFilterOptions = {
+    trenches: Array.from(new Set(drafts.map(d => d.trenchNumber).filter(Boolean))).sort(),
+    strata: Array.from(new Set(drafts.map(d => d.stratum).filter(Boolean))).sort(),
+    types: Array.from(new Set(drafts.map(d => d.artifactType).filter(Boolean))).sort(),
+  };
+
+  const filteredDrafts: DraftRecord[] = drafts.filter(draft => {
+    if (draftFilterTrench && draft.trenchNumber !== draftFilterTrench) return false;
+    if (draftFilterStratum && draft.stratum !== draftFilterStratum) return false;
+    if (draftFilterType && draft.artifactType !== draftFilterType) return false;
+    if (draftFilterKeyword) {
+      const keyword = draftFilterKeyword.toLowerCase();
+      const matchName = draft.draftName.toLowerCase().includes(keyword);
+      const matchRemarks = draft.remarks.toLowerCase().includes(keyword);
+      if (!matchName && !matchRemarks) return false;
+    }
+    return true;
+  });
+
+  const clearDraftFilters = () => {
+    setDraftFilterTrench("");
+    setDraftFilterStratum("");
+    setDraftFilterType("");
+    setDraftFilterKeyword("");
+  };
+
+  const groupedDrafts: Record<string, DraftRecord[]> = filteredDrafts.reduce((acc, draft) => {
     const key = draft.trenchNumber || "未指定探方";
     if (!acc[key]) {
       acc[key] = [];
@@ -2437,10 +2469,80 @@ function App() {
             </p>
           </div>
 
+          {drafts.length > 0 && (
+            <div className="draft-filter-bar">
+              <div className="draft-filter-row">
+                <div className="draft-filter-item">
+                  <label>探方</label>
+                  <select
+                    value={draftFilterTrench}
+                    onChange={(e) => setDraftFilterTrench(e.target.value)}
+                  >
+                    <option value="">全部探方</option>
+                    {draftFilterOptions.trenches.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="draft-filter-item">
+                  <label>地层</label>
+                  <select
+                    value={draftFilterStratum}
+                    onChange={(e) => setDraftFilterStratum(e.target.value)}
+                  >
+                    <option value="">全部地层</option>
+                    {draftFilterOptions.strata.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="draft-filter-item">
+                  <label>出土物类型</label>
+                  <select
+                    value={draftFilterType}
+                    onChange={(e) => setDraftFilterType(e.target.value)}
+                  >
+                    <option value="">全部类型</option>
+                    {draftFilterOptions.types.map(tp => (
+                      <option key={tp} value={tp}>{tp}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="draft-filter-item draft-filter-keyword">
+                  <label>搜索</label>
+                  <input
+                    type="text"
+                    placeholder="草稿名称或备注关键词..."
+                    value={draftFilterKeyword}
+                    onChange={(e) => setDraftFilterKeyword(e.target.value)}
+                  />
+                </div>
+                {hasDraftFilters && (
+                  <button onClick={clearDraftFilters} className="draft-filter-clear-btn">
+                    ✕ 清除筛选
+                  </button>
+                )}
+              </div>
+              {hasDraftFilters && (
+                <div className="draft-filter-summary">
+                  筛选结果：<strong>{filteredDrafts.length}</strong> / {drafts.length} 份草稿
+                </div>
+              )}
+            </div>
+          )}
+
           {drafts.length === 0 ? (
             <div className="empty-state-detail">
               <p className="empty-state">暂无草稿</p>
               <p className="empty-state-hint">在上方表单填写内容后点击"保存草稿"按钮即可保存</p>
+            </div>
+          ) : filteredDrafts.length === 0 ? (
+            <div className="empty-state-detail empty-state-filtered">
+              <p className="empty-state">🔍 未找到匹配的草稿</p>
+              <p className="empty-state-hint">尝试调整筛选条件或清除筛选后查看全部草稿</p>
+              <button onClick={clearDraftFilters} className="draft-filter-clear-btn draft-filter-clear-btn-large">
+                清除所有筛选
+              </button>
             </div>
           ) : (
             <div className="draft-groups">
@@ -2495,6 +2597,15 @@ function App() {
                             onClick={() => handleRestoreDraft(draft)}
                           >
                             ✏️ 恢复编辑
+                          </button>
+                          <button 
+                            className="action-btn action-new-from"
+                            onClick={() => {
+                              handleRestoreDraft(draft);
+                              handleNewFromDraft();
+                            }}
+                          >
+                            ✨ 另存为新记录
                           </button>
                           {draftDeleteConfirm === draft.id ? (
                             <span className="delete-confirm-group">
