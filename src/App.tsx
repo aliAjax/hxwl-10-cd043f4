@@ -2550,8 +2550,10 @@ function App() {
         remarks: record.remarks,
       });
       setFormErrors({});
-      if (record.status === "rejected") {
-        setStatusFilter("rejected");
+      if (record.status === "pending" || record.status === "rejected") {
+        setStatusFilter(record.status);
+      } else {
+        setStatusFilter("all");
       }
       setSearchFilters({
         trenchNumber: record.trenchNumber,
@@ -2562,12 +2564,26 @@ function App() {
       setCurrentDraftId(null);
       setDraftName("");
       setTimeout(() => {
-        const target = document.querySelector(".artifact-collection");
+        const target = document.querySelector(".records-section");
         if (target) {
           target.scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => {
+            const recordEl = document.querySelector(`[data-record-id="${action.recordId}"]`);
+            if (recordEl) {
+              recordEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              recordEl.classList.add("record-highlight-flash");
+              setTimeout(() => recordEl.classList.remove("record-highlight-flash"), 2000);
+            }
+          }, 500);
         }
       }, 100);
-      showToast(`已定位到记录 #${action.recordId}，请补录「${action.fieldLabel}」字段`);
+      const statusText: Record<ReviewStatus, string> = {
+        pending: "待审核",
+        approved: "已通过",
+        rejected: "已退回",
+        archived: "已归档",
+      };
+      showToast(`已定位到记录 #${action.recordId}（${statusText[record.status]}），请补录「${action.fieldLabel}」字段`);
     } else if (action.type === "pending_relation") {
       setCurrentRole("leader");
       setRelationFormData({
