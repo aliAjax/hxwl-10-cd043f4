@@ -1,17 +1,6 @@
-export interface DraftRecord {
-  id: number;
-  trenchNumber: string;
-  stratum: string;
-  artifactType: string;
-  eCoordinate: string;
-  nCoordinate: string;
-  depth: string;
-  remarks: string;
-  savedAt: string;
-  draftName: string;
-}
+import type { DraftRecord, DraftFormData } from "./types";
 
-type DraftFormData = Omit<DraftRecord, "id" | "savedAt">;
+export type { DraftRecord, DraftFormData };
 
 const DB_NAME = "ArchaeologyDraftDB";
 const DB_VERSION = 1;

@@ -1,11 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import type {
-  ArtifactRecord,
-  StratumRelation,
-  ExcavationLog,
-  SearchFilters,
-  UserRole,
-} from "../App";
+
 import { runConsistencyChecks, filterArtifactsForExport } from "./consistencyChecker";
 import { collectExportData } from "./dataCollector";
 import { downloadJsonFile, formatFileSize } from "./jsonExporter";
@@ -112,50 +106,6 @@ export default function ExportModule(props: ExportModuleProps) {
     });
   }, [buildCollectionInput, exportOptions]);
 
-  const performDownload = useCallback(
-    (bypassBlocking: boolean = false) => {
-      setExportStatus("exporting");
-      setExportResultInfo({});
-
-      setTimeout(() => {
-        try {
-          const dataPackage = buildDataPackage();
-          if (!dataPackage) {
-            setExportStatus("error");
-            setExportResultInfo({ error: "资料包构建失败" });
-            return;
-          }
-
-          if (!bypassBlocking && dataPackage.consistencyReport.blockingCount > 0) {
-            setExportStatus("error");
-            setExportResultInfo({
-              error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，已阻止下载。请修复后重试，或使用「强制导出」。`,
-            });
-            return;
-          }
-
-          const result = downloadJsonFile(dataPackage, { ...exportOptions, requireConsistencyPass: !bypassBlocking });
-          if (result.success) {
-            setExportStatus("success");
-            setExportResultInfo({
-              fileName: result.fileName,
-              fileSize: formatFileSize(result.sizeBytes),
-            });
-          } else {
-            setExportStatus("error");
-            setExportResultInfo({ error: result.error || "下载失败" });
-          }
-        } catch (err) {
-          setExportStatus("error");
-          setExportResultInfo({
-            error: err instanceof Error ? err.message : "导出过程发生未知错误",
-          });
-        }
-      }, 300);
-    },
-    [buildDataPackage, exportOptions]
-  );
-
   const handleExportJson = useCallback(() => {
     if (report && report.blockingCount > 0) {
       setExportStatus("error");
@@ -164,12 +114,46 @@ export default function ExportModule(props: ExportModuleProps) {
       });
       return;
     }
-    performDownload(false);
-  }, [performDownload, report]);
 
-  const handleForceExport = useCallback(() => {
-    performDownload(true);
-  }, [performDownload]);
+    setExportStatus("exporting");
+    setExportResultInfo({});
+
+    setTimeout(() => {
+      try {
+        const dataPackage = buildDataPackage();
+        if (!dataPackage) {
+          setExportStatus("error");
+          setExportResultInfo({ error: "资料包构建失败" });
+          return;
+        }
+
+        if (dataPackage.consistencyReport.blockingCount > 0) {
+          setExportStatus("error");
+          setExportResultInfo({
+            error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，已阻止下载。`,
+          });
+          return;
+        }
+
+        const result = downloadJsonFile(dataPackage, { ...exportOptions, requireConsistencyPass: true });
+        if (result.success) {
+          setExportStatus("success");
+          setExportResultInfo({
+            fileName: result.fileName,
+            fileSize: formatFileSize(result.sizeBytes),
+          });
+        } else {
+          setExportStatus("error");
+          setExportResultInfo({ error: result.error || "下载失败" });
+        }
+      } catch (err) {
+        setExportStatus("error");
+        setExportResultInfo({
+          error: err instanceof Error ? err.message : "导出过程发生未知错误",
+        });
+      }
+    }, 300);
+  }, [buildDataPackage, exportOptions, report]);
 
   const handleTestBackendUpload = useCallback(async () => {
     setApiTestResult("正在调用后端上传接口（模拟）...");
@@ -318,17 +302,6 @@ export default function ExportModule(props: ExportModuleProps) {
           >
             📦 下载 JSON 资料包
           </button>
-
-          {checkStatus === "checked" && hasBlocking && (
-            <button
-              className="export-force-btn"
-              onClick={handleForceExport}
-              disabled={exportStatus === "exporting"}
-              title="警告：仍含阻断问题，强制导出可能导致资料包不完整"
-            >
-              ⚠ 强制导出（忽略阻断）
-            </button>
-          )}
 
           <button
             className="export-api-toggle-btn"

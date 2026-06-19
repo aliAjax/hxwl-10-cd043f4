@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import "./styles.css";
 import {
-  DraftRecord,
   isIndexedDBSupported,
   saveDraft as saveDraftToDB,
   getAllDrafts,
@@ -9,115 +8,27 @@ import {
   clearAllDrafts as clearAllDraftsFromDB,
 } from "./indexedDB";
 import ExportModule from "./export";
+import {
+  type ReviewStatus,
+  type UserRole,
+  type ArtifactRecord,
+  type ArtifactFormData,
+  type ExcavationLog,
+  type ExcavationLogFormData,
+  type SearchFilters,
+  type FormErrors,
+  type ExcavationLogFormErrors,
+  type RelationType,
+  type StratumRelation,
+  type StratumRelationFormData,
+  type StratumRelationFormErrors,
+  type BatchImportRow,
+  type ParsedImportResult,
+  type DraftRecord,
+  batchImportHeaders,
+} from "./types";
 
-type ReviewStatus = "pending" | "approved" | "rejected" | "archived";
-type UserRole = "excavator" | "leader" | "archivist";
 
-interface ArtifactRecord {
-  id: number;
-  trenchNumber: string;
-  stratum: string;
-  artifactType: string;
-  eCoordinate: string;
-  nCoordinate: string;
-  depth: string;
-  remarks: string;
-  createdAt: string;
-  relicUnit?: string;
-  quantity?: string;
-  status: ReviewStatus;
-  submittedBy?: string;
-  submittedAt?: string;
-  reviewReason?: string;
-  reviewedBy?: string;
-  reviewedAt?: string;
-  archivedBy?: string;
-  archivedAt?: string;
-}
-
-interface ArtifactFormData {
-  trenchNumber: string;
-  stratum: string;
-  artifactType: string;
-  eCoordinate: string;
-  nCoordinate: string;
-  depth: string;
-  remarks: string;
-}
-
-interface ExcavationLog {
-  id: number;
-  date: string;
-  weather: string;
-  participants: string;
-  excavationArea: string;
-  mainFindings: string;
-  pendingReview: string;
-  createdAt: string;
-}
-
-interface ExcavationLogFormData {
-  date: string;
-  weather: string;
-  participants: string;
-  excavationArea: string;
-  mainFindings: string;
-  pendingReview: string;
-}
-
-interface SearchFilters {
-  trenchNumber: string;
-  stratum: string;
-  relicUnit: string;
-  artifactKeyword: string;
-}
-
-type FormErrors = Partial<Record<keyof ArtifactFormData, string>>;
-type ExcavationLogFormErrors = Partial<Record<keyof ExcavationLogFormData, string>>;
-
-type RelationType = "earlier" | "breaks" | "contains";
-
-interface StratumRelation {
-  id: number;
-  stratumA: string;
-  stratumB: string;
-  relationType: RelationType;
-  createdAt: string;
-}
-
-interface StratumRelationFormData {
-  stratumA: string;
-  stratumB: string;
-  relationType: RelationType | "";
-}
-
-type StratumRelationFormErrors = Partial<Record<keyof StratumRelationFormData | "conflict", string>>;
-
-interface BatchImportRow {
-  rowNumber: number;
-  trenchNumber: string;
-  stratum: string;
-  relicUnit: string;
-  coordinatePoint: string;
-  depth: string;
-  artifactType: string;
-  quantity: string;
-}
-
-interface ParsedImportResult {
-  validRows: BatchImportRow[];
-  errorRows: { row: BatchImportRow; errors: string[] }[];
-}
-
-const batchImportHeaders = [
-  { key: "trenchNumber", label: "探方", required: true },
-  { key: "stratum", label: "地层", required: true },
-  { key: "relicUnit", label: "遗迹单位", required: false },
-  { key: "coordinatePoint", label: "坐标点", required: true },
-  { key: "depth", label: "深度", required: true },
-  { key: "artifactType", label: "类型", required: true },
-  { key: "quantity", label: "数量", required: true }
-];
 
 const HEADER_ALIASES: Record<string, string> = {
   "探方": "trenchNumber", "探方编号": "trenchNumber", "trench": "trenchNumber", "trenchnumber": "trenchNumber",

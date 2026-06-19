@@ -2661,19 +2661,6 @@ button:disabled {
   filter: brightness(1.1);
 }
 
-.export-force-btn {
-  background: #fffbeb !important;
-  color: #b45309 !important;
-  border: 1px solid #f59e0b !important;
-  font-weight: 600;
-  min-height: 42px !important;
-  padding: 0 16px !important;
-}
-
-.export-force-btn:hover:not(:disabled) {
-  background: #fef3c7 !important;
-}
-
 .export-api-toggle-btn {
   background: #ffffff;
   color: #475569;

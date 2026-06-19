@@ -1,4 +1,17 @@
-import type { ArtifactRecord, StratumRelation, ExcavationLog, SearchFilters } from "../App";
+// ============================================================
+// 导出模块内部类型定义
+// ============================================================
+// 仅包含导出模块独有的业务类型；
+// 全局共享类型（ArtifactRecord、StratumRelation 等）从 ../types 导入。
+// ============================================================
+
+import type {
+  ArtifactRecord,
+  StratumRelation,
+  ExcavationLog,
+  SearchFilters,
+  UserRole,
+} from "../types";
 
 export interface ProjectMetrics {
   trenchCount: number;
@@ -102,10 +115,6 @@ export interface DataCollectionInput {
 // ============================================================
 // 入站类型边界：ExportModule 组件 Props
 // ============================================================
-// 外部调用方（如 App.tsx）需要提供这些数据。
-// 导出模块内部的其他函数不应直接依赖此类型，
-// 而应使用 DataCollectionInput 等内部类型。
-// ============================================================
 
 export interface ExportModuleProps {
   project: {
@@ -116,11 +125,11 @@ export interface ExportModuleProps {
     metrics: string[];
     filters: string[];
   };
-  searchFilters: import("../App").SearchFilters;
+  searchFilters: SearchFilters;
   hasActiveFilters: boolean;
-  artifactRecords: import("../App").ArtifactRecord[];
-  stratumRelations: import("../App").StratumRelation[];
-  excavationLogs: import("../App").ExcavationLog[];
-  currentRole: import("../App").UserRole;
+  artifactRecords: ArtifactRecord[];
+  stratumRelations: StratumRelation[];
+  excavationLogs: ExcavationLog[];
+  currentRole: UserRole;
   currentRoleLabel?: string;
 }

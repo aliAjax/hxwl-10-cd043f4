@@ -2,7 +2,7 @@ import type {
   ArtifactRecord,
   StratumRelation,
   RelationType,
-} from "../App";
+} from "../types";
 import type {
   ConsistencyIssue,
   ConsistencyReport,
