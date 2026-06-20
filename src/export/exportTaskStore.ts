@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 const DB_NAME = "ArchaeologyDraftDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const EXPORT_TASKS_STORE = "exportTasks";
 
 const isIndexedDBSupported = (): boolean => {
@@ -127,6 +127,7 @@ export interface CreateTaskParams {
   taskId?: string;
   message?: string;
   dataPackageSchemaVersion?: string;
+  dataPackageJsonSnapshot?: string;
 }
 
 export const buildTaskSnapshot = (
@@ -178,6 +179,7 @@ const createTaskRecord = (
     taskId: params.taskId,
     message: params.message,
     dataPackageSchemaVersion: params.dataPackageSchemaVersion,
+    dataPackageJsonSnapshot: params.dataPackageJsonSnapshot,
   };
 };
 

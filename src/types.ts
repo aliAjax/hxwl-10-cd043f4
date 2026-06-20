@@ -426,6 +426,7 @@ export interface ExportTaskBase {
   taskId?: string;
   message?: string;
   dataPackageSchemaVersion?: string;
+  dataPackageJsonSnapshot?: string;
 }
 
 export interface ExportTaskSuccess extends ExportTaskBase {
@@ -448,7 +449,7 @@ export type ExportTaskRecord =
   | ExportTaskError
   | ExportTaskPending;
 
-export const EXPORT_TASK_SCHEMA_VERSION = "1.0.0";
+export const EXPORT_TASK_SCHEMA_VERSION = "1.1.0";
 
 export const isExportTaskRecord = (
   record: unknown

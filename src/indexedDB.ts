@@ -3,7 +3,7 @@ import type { DraftRecord, DraftFormData } from "./types";
 export type { DraftRecord, DraftFormData };
 
 const DB_NAME = "ArchaeologyDraftDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = "drafts";
 
 export const isIndexedDBSupported = (): boolean => {

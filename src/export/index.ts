@@ -35,7 +35,7 @@ export { runConsistencyChecks, filterArtifactsForExport } from "./consistencyChe
 export { collectExportData, computeMetrics, summarizeTrenches } from "./dataCollector";
 
 // —— JSON 导出下载 ——
-export { downloadJsonFile, serializeDataPackage, formatFileSize } from "./jsonExporter";
+export { downloadJsonFile, downloadJsonFromSnapshot, serializeDataPackage, formatFileSize } from "./jsonExporter";
 
 // —— 后端 API 边界 ——
 export { backendApi } from "./apiBoundary";

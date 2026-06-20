@@ -67,6 +67,58 @@ export const downloadJsonFile = (
   }
 };
 
+export const downloadJsonFromSnapshot = (
+  jsonSnapshot: string,
+  fileName: string
+): { success: boolean; fileName: string; sizeBytes: number; error?: string } => {
+  try {
+    if (!jsonSnapshot || !jsonSnapshot.trim()) {
+      return {
+        success: false,
+        fileName,
+        sizeBytes: 0,
+        error: "JSON 快照为空",
+      };
+    }
+
+    if (typeof window === "undefined") {
+      return {
+        success: false,
+        fileName,
+        sizeBytes: jsonSnapshot.length,
+        error: "当前环境不支持浏览器下载API",
+      };
+    }
+
+    const blob = new Blob([jsonSnapshot], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+
+    return {
+      success: true,
+      fileName,
+      sizeBytes: blob.size,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      fileName,
+      sizeBytes: 0,
+      error: error instanceof Error ? error.message : "未知下载错误",
+    };
+  }
+};
+
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

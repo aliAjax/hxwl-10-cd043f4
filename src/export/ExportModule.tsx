@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 
 import { runConsistencyChecks, filterArtifactsForExport } from "./consistencyChecker";
 import { collectExportData } from "./dataCollector";
-import { downloadJsonFile, formatFileSize } from "./jsonExporter";
+import { downloadJsonFile, downloadJsonFromSnapshot, formatFileSize, serializeDataPackage } from "./jsonExporter";
 import { backendApi } from "./apiBoundary";
 import { pdfGenerator } from "./pdfBoundary";
 import {
@@ -107,14 +107,16 @@ export default function ExportModule(props: ExportModuleProps) {
     [props]
   );
 
-  const handleRunChecks = useCallback(() => {
+  const handleRunChecks = useCallback((overrideOptions?: ExportOptions) => {
     setCheckStatus("checking");
     setExportResultInfo({});
     setExportStatus("idle");
     setShowDetails(true);
 
+    const effectiveOptions = overrideOptions ?? exportOptions;
+
     setTimeout(() => {
-      const input = buildCollectionInput(exportOptions);
+      const input = buildCollectionInput(effectiveOptions);
       const consistencyReport = runConsistencyChecks(input);
       setReport(consistencyReport);
       setCheckStatus("checked");
@@ -122,7 +124,7 @@ export default function ExportModule(props: ExportModuleProps) {
       try {
         const snapshot = buildTaskSnapshot(
           props.project,
-          exportOptions,
+          effectiveOptions,
           props.searchFilters,
           props.hasActiveFilters
         );
@@ -262,11 +264,12 @@ export default function ExportModule(props: ExportModuleProps) {
     [props]
   );
 
-  const buildDataPackage = useCallback((): ExportDataPackage | null => {
-    const input = buildCollectionInput(exportOptions);
+  const buildDataPackage = useCallback((overrideOptions?: ExportOptions): ExportDataPackage | null => {
+    const effectiveOptions = overrideOptions ?? exportOptions;
+    const input = buildCollectionInput(effectiveOptions);
     const consistencyReport = runConsistencyChecks(input);
     return collectExportData(input, consistencyReport, {
-      includeLogs: exportOptions.includeLogs,
+      includeLogs: effectiveOptions.includeLogs,
     });
   }, [buildCollectionInput, exportOptions]);
 
@@ -379,6 +382,7 @@ export default function ExportModule(props: ExportModuleProps) {
               props.hasActiveFilters
             );
             const checkResult = buildCheckResult(dataPackage.consistencyReport);
+            const jsonSnapshot = serializeDataPackage(dataPackage);
             saveExportTask(
               {
                 taskType: "json_export",
@@ -387,6 +391,7 @@ export default function ExportModule(props: ExportModuleProps) {
                 fileName: result.fileName,
                 fileSizeBytes: result.sizeBytes,
                 dataPackageSchemaVersion: dataPackage.schemaVersion,
+                dataPackageJsonSnapshot: jsonSnapshot,
               },
               "success"
             );
@@ -567,20 +572,33 @@ export default function ExportModule(props: ExportModuleProps) {
   }, [buildDataPackage, exportOptions, props, report]);
 
   const handleReapplyOptions = useCallback((snapshot: ExportTaskSnapshot) => {
-    setExportOptions({
+    const restoredOptions: ExportOptions = {
       includePendingRecords: snapshot.exportOptions.includePendingRecords,
       includeRejectedRecords: snapshot.exportOptions.includeRejectedRecords,
       includeLogs: snapshot.exportOptions.includeLogs,
-    });
+    };
+    setExportOptions(restoredOptions);
     setShowTaskHistory(false);
-    setTimeout(() => {
-      handleRunChecks();
-    }, 100);
+    handleRunChecks(restoredOptions);
   }, [handleRunChecks]);
 
   const handleRedownloadJson = useCallback((task: ExportTaskRecord) => {
     if (task.taskType !== "json_export" || task.status !== "success" || !task.fileName) {
       return;
+    }
+
+    if (task.dataPackageJsonSnapshot && task.dataPackageJsonSnapshot.trim()) {
+      const result = downloadJsonFromSnapshot(task.dataPackageJsonSnapshot, task.fileName);
+      if (result.success) {
+        setExportStatus("success");
+        setExportResultInfo({
+          fileName: result.fileName,
+          fileSize: formatFileSize(result.sizeBytes),
+        });
+        return;
+      }
+      setExportStatus("error");
+      setExportResultInfo({ error: `快照下载失败：${result.error || "未知错误"}，正在尝试重新生成...` });
     }
 
     const snapshot = task.snapshot;
@@ -638,6 +656,7 @@ export default function ExportModule(props: ExportModuleProps) {
           snapshot.hasActiveFilters
         );
         const checkResult = buildCheckResult(dataPackage.consistencyReport);
+        const jsonSnapshot = serializeDataPackage(dataPackage);
         saveExportTask(
           {
             taskType: "json_export",
@@ -646,6 +665,7 @@ export default function ExportModule(props: ExportModuleProps) {
             fileName: result.fileName,
             fileSizeBytes: result.sizeBytes,
             dataPackageSchemaVersion: dataPackage.schemaVersion,
+            dataPackageJsonSnapshot: jsonSnapshot,
             message: `从历史任务 #${task.id} 重新下载`,
           },
           "success"
@@ -759,7 +779,7 @@ export default function ExportModule(props: ExportModuleProps) {
       <div className="export-actions-bar">
         <button
           className="export-check-btn"
-          onClick={handleRunChecks}
+          onClick={() => handleRunChecks()}
           disabled={checkStatus === "checking" || exportStatus === "exporting"}
         >
           🔍 {checkStatus === "idle" ? "运行一致性检查" : "重新检查"}

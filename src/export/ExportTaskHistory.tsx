@@ -306,6 +306,16 @@ export default function ExportTaskHistory(props: ExportTaskHistoryProps) {
                     <span className="meta-value">{task.dataPackageSchemaVersion}</span>
                   </div>
                 )}
+                {task.taskType === "json_export" && (
+                  <div className="task-meta-row">
+                    <span className="meta-label">数据快照:</span>
+                    <span className={`meta-value ${task.dataPackageJsonSnapshot ? "snapshot-available" : "snapshot-unavailable"}`}>
+                      {task.dataPackageJsonSnapshot
+                        ? `✅ 已保存 (${formatFileSize(task.dataPackageJsonSnapshot.length)})`
+                        : "❌ 未保存（旧记录）"}
+                    </span>
+                  </div>
+                )}
                 <div className="task-meta-row">
                   <span className="meta-label">历史版本:</span>
                   <span className="meta-value">schema v{task.schemaVersion}</span>
@@ -348,7 +358,9 @@ export default function ExportTaskHistory(props: ExportTaskHistoryProps) {
                     className="task-action-btn task-action-download"
                     onClick={() => handleRedownload(task)}
                   >
-                    📥 重新下载资料包
+                    {task.dataPackageJsonSnapshot
+                      ? "📥 使用快照重新下载"
+                      : "📥 重新生成并下载"}
                   </button>
                 )}
                 <button
