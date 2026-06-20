@@ -48,3 +48,26 @@ export type {
 // —— PDF 生成边界 ——
 export { pdfGenerator } from "./pdfBoundary";
 export type { PdfTemplateOptions } from "./pdfBoundary";
+
+// —— 导出任务历史 ——
+export { default as ExportTaskHistory } from "./ExportTaskHistory.tsx";
+export type { ExportTaskHistoryProps } from "./ExportTaskHistory.tsx";
+export {
+  saveExportTask,
+  updateExportTask,
+  getExportTask,
+  getAllExportTasks,
+  deleteExportTask,
+  clearAllExportTasks,
+  getTaskCount,
+  buildTaskSnapshot,
+  buildCheckResult,
+} from "./exportTaskStore";
+export type { CreateTaskParams } from "./exportTaskStore";
+export type {
+  ExportTaskRecord,
+  ExportTaskType,
+  ExportTaskStatus,
+  ExportTaskSnapshot,
+  ExportTaskCheckResult,
+} from "../types";

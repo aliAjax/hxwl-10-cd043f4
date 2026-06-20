@@ -5,6 +5,12 @@ import { collectExportData } from "./dataCollector";
 import { downloadJsonFile, formatFileSize } from "./jsonExporter";
 import { backendApi } from "./apiBoundary";
 import { pdfGenerator } from "./pdfBoundary";
+import {
+  buildTaskSnapshot,
+  buildCheckResult,
+  saveExportTask,
+} from "./exportTaskStore";
+import ExportTaskHistory from "./ExportTaskHistory.tsx";
 import type {
   ConsistencyReport,
   ConsistencyIssue,
@@ -17,6 +23,10 @@ import type {
   RepairChecklistTrenchGroup,
   IssueCategory,
 } from "./types";
+import type {
+  ExportTaskRecord,
+  ExportTaskSnapshot,
+} from "../types";
 
 const categoryLabels: Record<string, string> = {
   missing_trench_number: "缺失探方编号",
@@ -70,6 +80,7 @@ export default function ExportModule(props: ExportModuleProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [showApiTest, setShowApiTest] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<string>("");
+  const [showTaskHistory, setShowTaskHistory] = useState(false);
 
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     includePendingRecords: true,
@@ -107,8 +118,28 @@ export default function ExportModule(props: ExportModuleProps) {
       const consistencyReport = runConsistencyChecks(input);
       setReport(consistencyReport);
       setCheckStatus("checked");
+
+      try {
+        const snapshot = buildTaskSnapshot(
+          props.project,
+          exportOptions,
+          props.searchFilters,
+          props.hasActiveFilters
+        );
+        const checkResult = buildCheckResult(consistencyReport);
+        saveExportTask(
+          {
+            taskType: "consistency_check",
+            snapshot,
+            checkResult,
+          },
+          "success"
+        );
+      } catch (err) {
+        console.warn("保存一致性检查任务历史失败:", err);
+      }
     }, 300);
-  }, [buildCollectionInput, exportOptions]);
+  }, [buildCollectionInput, exportOptions, props]);
 
   useEffect(() => {
     if (props.recheckToken !== undefined && props.recheckToken > 0) {
@@ -245,6 +276,27 @@ export default function ExportModule(props: ExportModuleProps) {
       setExportResultInfo({
         error: `存在 ${report.blockingCount} 项阻断问题，禁止导出资料包。请先修复所有阻断项后再试。`,
       });
+
+      try {
+        const snapshot = buildTaskSnapshot(
+          props.project,
+          exportOptions,
+          props.searchFilters,
+          props.hasActiveFilters
+        );
+        const checkResult = report ? buildCheckResult(report) : undefined;
+        saveExportTask(
+          {
+            taskType: "json_export",
+            snapshot,
+            checkResult,
+            error: `存在 ${report.blockingCount} 项阻断问题，禁止导出资料包。请先修复所有阻断项后再试。`,
+          },
+          "error"
+        );
+      } catch (err) {
+        console.warn("保存JSON导出任务历史失败:", err);
+      }
       return;
     }
 
@@ -257,6 +309,27 @@ export default function ExportModule(props: ExportModuleProps) {
         if (!dataPackage) {
           setExportStatus("error");
           setExportResultInfo({ error: "资料包构建失败" });
+
+          try {
+            const snapshot = buildTaskSnapshot(
+              props.project,
+              exportOptions,
+              props.searchFilters,
+              props.hasActiveFilters
+            );
+            const checkResult = report ? buildCheckResult(report) : undefined;
+            saveExportTask(
+              {
+                taskType: "json_export",
+                snapshot,
+                checkResult,
+                error: "资料包构建失败",
+              },
+              "error"
+            );
+          } catch (err) {
+            console.warn("保存JSON导出任务历史失败:", err);
+          }
           return;
         }
 
@@ -265,6 +338,28 @@ export default function ExportModule(props: ExportModuleProps) {
           setExportResultInfo({
             error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，已阻止下载。`,
           });
+
+          try {
+            const snapshot = buildTaskSnapshot(
+              props.project,
+              exportOptions,
+              props.searchFilters,
+              props.hasActiveFilters
+            );
+            const checkResult = buildCheckResult(dataPackage.consistencyReport);
+            saveExportTask(
+              {
+                taskType: "json_export",
+                snapshot,
+                checkResult,
+                dataPackageSchemaVersion: dataPackage.schemaVersion,
+                error: `资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题，已阻止下载。`,
+              },
+              "error"
+            );
+          } catch (err) {
+            console.warn("保存JSON导出任务历史失败:", err);
+          }
           return;
         }
 
@@ -275,37 +370,168 @@ export default function ExportModule(props: ExportModuleProps) {
             fileName: result.fileName,
             fileSize: formatFileSize(result.sizeBytes),
           });
+
+          try {
+            const snapshot = buildTaskSnapshot(
+              props.project,
+              exportOptions,
+              props.searchFilters,
+              props.hasActiveFilters
+            );
+            const checkResult = buildCheckResult(dataPackage.consistencyReport);
+            saveExportTask(
+              {
+                taskType: "json_export",
+                snapshot,
+                checkResult,
+                fileName: result.fileName,
+                fileSizeBytes: result.sizeBytes,
+                dataPackageSchemaVersion: dataPackage.schemaVersion,
+              },
+              "success"
+            );
+          } catch (err) {
+            console.warn("保存JSON导出任务历史失败:", err);
+          }
         } else {
           setExportStatus("error");
           setExportResultInfo({ error: result.error || "下载失败" });
+
+          try {
+            const snapshot = buildTaskSnapshot(
+              props.project,
+              exportOptions,
+              props.searchFilters,
+              props.hasActiveFilters
+            );
+            const checkResult = buildCheckResult(dataPackage.consistencyReport);
+            saveExportTask(
+              {
+                taskType: "json_export",
+                snapshot,
+                checkResult,
+                dataPackageSchemaVersion: dataPackage.schemaVersion,
+                error: result.error || "下载失败",
+              },
+              "error"
+            );
+          } catch (err) {
+            console.warn("保存JSON导出任务历史失败:", err);
+          }
         }
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "导出过程发生未知错误";
         setExportStatus("error");
-        setExportResultInfo({
-          error: err instanceof Error ? err.message : "导出过程发生未知错误",
-        });
+        setExportResultInfo({ error: errorMessage });
+
+        try {
+          const snapshot = buildTaskSnapshot(
+            props.project,
+            exportOptions,
+            props.searchFilters,
+            props.hasActiveFilters
+          );
+          const checkResult = report ? buildCheckResult(report) : undefined;
+          saveExportTask(
+            {
+              taskType: "json_export",
+              snapshot,
+              checkResult,
+              error: errorMessage,
+            },
+            "error"
+          );
+        } catch (saveErr) {
+          console.warn("保存JSON导出任务历史失败:", saveErr);
+        }
       }
     }, 300);
-  }, [buildDataPackage, exportOptions, report]);
+  }, [buildDataPackage, exportOptions, props, report]);
 
   const handleTestBackendUpload = useCallback(async () => {
     setApiTestResult("正在调用后端上传接口（模拟）...");
     const dataPackage = buildDataPackage();
     if (!dataPackage) {
       setApiTestResult("构建资料包失败");
+
+      try {
+        const snapshot = buildTaskSnapshot(
+          props.project,
+          exportOptions,
+          props.searchFilters,
+          props.hasActiveFilters
+        );
+        const checkResult = report ? buildCheckResult(report) : undefined;
+        saveExportTask(
+          {
+            taskType: "backend_upload",
+            snapshot,
+            checkResult,
+            error: "构建资料包失败",
+          },
+          "error"
+        );
+      } catch (err) {
+        console.warn("保存后端上传任务历史失败:", err);
+      }
       return;
     }
     const result = await backendApi.uploadDataPackage(dataPackage);
     setApiTestResult(
       `任务ID: ${result.taskId || "—"}\n结果: ${result.success ? "✅ 成功" : "❌ 失败"}\n消息: ${result.message || result.error || "无"}`
     );
-  }, [buildDataPackage]);
+
+    try {
+      const snapshot = buildTaskSnapshot(
+        props.project,
+        exportOptions,
+        props.searchFilters,
+        props.hasActiveFilters
+      );
+      const checkResult = buildCheckResult(dataPackage.consistencyReport);
+      saveExportTask(
+        {
+          taskType: "backend_upload",
+          snapshot,
+          checkResult,
+          dataPackageSchemaVersion: dataPackage.schemaVersion,
+          taskId: result.taskId,
+          message: result.message,
+          error: result.error,
+        },
+        result.success ? "success" : "error"
+      );
+    } catch (err) {
+      console.warn("保存后端上传任务历史失败:", err);
+    }
+  }, [buildDataPackage, exportOptions, props, report]);
 
   const handleTestPdf = useCallback(async () => {
     setApiTestResult("正在调用PDF报告生成接口（模拟）...");
     const dataPackage = buildDataPackage();
     if (!dataPackage) {
       setApiTestResult("构建资料包失败");
+
+      try {
+        const snapshot = buildTaskSnapshot(
+          props.project,
+          exportOptions,
+          props.searchFilters,
+          props.hasActiveFilters
+        );
+        const checkResult = report ? buildCheckResult(report) : undefined;
+        saveExportTask(
+          {
+            taskType: "pdf_generation",
+            snapshot,
+            checkResult,
+            error: "构建资料包失败",
+          },
+          "error"
+        );
+      } catch (err) {
+        console.warn("保存PDF生成任务历史失败:", err);
+      }
       return;
     }
     const result = await pdfGenerator.generatePdfFrontend(dataPackage, {
@@ -315,7 +541,123 @@ export default function ExportModule(props: ExportModuleProps) {
     setApiTestResult(
       `任务ID: （纯前端边界）\n结果: ${result.success ? "✅ 成功" : "❌ 预留占位"}\n${result.hint || result.error || ""}`
     );
-  }, [buildDataPackage]);
+
+    try {
+      const snapshot = buildTaskSnapshot(
+        props.project,
+        exportOptions,
+        props.searchFilters,
+        props.hasActiveFilters
+      );
+      const checkResult = buildCheckResult(dataPackage.consistencyReport);
+      saveExportTask(
+        {
+          taskType: "pdf_generation",
+          snapshot,
+          checkResult,
+          dataPackageSchemaVersion: dataPackage.schemaVersion,
+          message: result.hint,
+          error: result.error,
+        },
+        result.success ? "success" : "error"
+      );
+    } catch (err) {
+      console.warn("保存PDF生成任务历史失败:", err);
+    }
+  }, [buildDataPackage, exportOptions, props, report]);
+
+  const handleReapplyOptions = useCallback((snapshot: ExportTaskSnapshot) => {
+    setExportOptions({
+      includePendingRecords: snapshot.exportOptions.includePendingRecords,
+      includeRejectedRecords: snapshot.exportOptions.includeRejectedRecords,
+      includeLogs: snapshot.exportOptions.includeLogs,
+    });
+    setShowTaskHistory(false);
+    setTimeout(() => {
+      handleRunChecks();
+    }, 100);
+  }, [handleRunChecks]);
+
+  const handleRedownloadJson = useCallback((task: ExportTaskRecord) => {
+    if (task.taskType !== "json_export" || task.status !== "success" || !task.fileName) {
+      return;
+    }
+
+    const snapshot = task.snapshot;
+    const restoredOptions: ExportOptions = {
+      includePendingRecords: snapshot.exportOptions.includePendingRecords,
+      includeRejectedRecords: snapshot.exportOptions.includeRejectedRecords,
+      includeLogs: snapshot.exportOptions.includeLogs,
+    };
+
+    const filteredArtifacts = filterArtifactsForExport(props.artifactRecords, {
+      includePending: restoredOptions.includePendingRecords,
+      includeRejected: restoredOptions.includeRejectedRecords,
+    });
+
+    const input: DataCollectionInput = {
+      project: props.project,
+      searchFilters: snapshot.searchFilters,
+      hasActiveFilters: snapshot.hasActiveFilters,
+      artifactRecords: filteredArtifacts,
+      stratumRelations: props.stratumRelations,
+      excavationLogs: restoredOptions.includeLogs ? props.excavationLogs : [],
+      currentRole: roleNamesLocal[props.currentRole],
+    };
+
+    const consistencyReport = runConsistencyChecks(input);
+    const dataPackage = collectExportData(input, consistencyReport, {
+      includeLogs: restoredOptions.includeLogs,
+    });
+
+    if (dataPackage.consistencyReport.blockingCount > 0) {
+      setExportStatus("error");
+      setExportResultInfo({
+        error: `重新下载失败：资料包包含 ${dataPackage.consistencyReport.blockingCount} 项阻断问题。`,
+      });
+      return;
+    }
+
+    const result = downloadJsonFile(dataPackage, {
+      ...restoredOptions,
+      requireConsistencyPass: true,
+    });
+
+    if (result.success) {
+      setExportStatus("success");
+      setExportResultInfo({
+        fileName: result.fileName,
+        fileSize: formatFileSize(result.sizeBytes),
+      });
+
+      try {
+        const newSnapshot = buildTaskSnapshot(
+          props.project,
+          restoredOptions,
+          snapshot.searchFilters,
+          snapshot.hasActiveFilters
+        );
+        const checkResult = buildCheckResult(dataPackage.consistencyReport);
+        saveExportTask(
+          {
+            taskType: "json_export",
+            snapshot: newSnapshot,
+            checkResult,
+            fileName: result.fileName,
+            fileSizeBytes: result.sizeBytes,
+            dataPackageSchemaVersion: dataPackage.schemaVersion,
+            message: `从历史任务 #${task.id} 重新下载`,
+          },
+          "success"
+        );
+      } catch (err) {
+        console.warn("保存重新下载任务历史失败:", err);
+      }
+    } else {
+      setExportStatus("error");
+      setExportResultInfo({ error: result.error || "重新下载失败" });
+    }
+  }, [props]);
 
   const canExport = checkStatus === "checked" && report?.isExportable === true;
   const hasBlocking = checkStatus === "checked" && report && report.blockingCount > 0;
@@ -425,6 +767,13 @@ export default function ExportModule(props: ExportModuleProps) {
 
         <div className="export-actions-right">
           <button
+            className="export-api-toggle-btn"
+            onClick={() => setShowTaskHistory((v) => !v)}
+          >
+            📜 {showTaskHistory ? "隐藏" : "查看"}导出历史
+          </button>
+
+          <button
             className="primary-action export-main-btn"
             onClick={handleExportJson}
             disabled={
@@ -444,6 +793,14 @@ export default function ExportModule(props: ExportModuleProps) {
           </button>
         </div>
       </div>
+
+      {showTaskHistory && (
+        <ExportTaskHistory
+          projectId={props.project.id}
+          onReapplyOptions={handleReapplyOptions}
+          onRedownloadJson={handleRedownloadJson}
+        />
+      )}
 
       {exportStatus !== "idle" && (
         <div

@@ -379,3 +379,89 @@ export type ExceptionAction =
   | { type: "pending_archive"; recordId: number; trenchNumber: string; stratum: string; artifactType: string };
 
 export type GraphViewMode = "graph" | "hierarchy";
+
+// ============================================================
+// 导出任务历史
+// ============================================================
+
+export type ExportTaskType =
+  | "consistency_check"
+  | "json_export"
+  | "backend_upload"
+  | "pdf_generation";
+
+export type ExportTaskStatus = "pending" | "success" | "error";
+
+export interface ExportTaskSnapshot {
+  exportOptions: {
+    includePendingRecords: boolean;
+    includeRejectedRecords: boolean;
+    includeLogs: boolean;
+  };
+  searchFilters: SearchFilters;
+  hasActiveFilters: boolean;
+  projectId: string;
+  projectTitle: string;
+}
+
+export interface ExportTaskCheckResult {
+  blockingCount: number;
+  warningCount: number;
+  totalIssues: number;
+  isExportable: boolean;
+}
+
+export interface ExportTaskBase {
+  id: number;
+  schemaVersion: string;
+  taskType: ExportTaskType;
+  status: ExportTaskStatus;
+  createdAt: string;
+  completedAt?: string;
+  snapshot: ExportTaskSnapshot;
+  checkResult?: ExportTaskCheckResult;
+  fileName?: string;
+  fileSizeBytes?: number;
+  error?: string;
+  taskId?: string;
+  message?: string;
+  dataPackageSchemaVersion?: string;
+}
+
+export interface ExportTaskSuccess extends ExportTaskBase {
+  status: "success";
+  completedAt: string;
+}
+
+export interface ExportTaskError extends ExportTaskBase {
+  status: "error";
+  completedAt: string;
+  error: string;
+}
+
+export interface ExportTaskPending extends ExportTaskBase {
+  status: "pending";
+}
+
+export type ExportTaskRecord =
+  | ExportTaskSuccess
+  | ExportTaskError
+  | ExportTaskPending;
+
+export const EXPORT_TASK_SCHEMA_VERSION = "1.0.0";
+
+export const isExportTaskRecord = (
+  record: unknown
+): record is ExportTaskRecord => {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return (
+    typeof r.id === "number" &&
+    typeof r.schemaVersion === "string" &&
+    typeof r.taskType === "string" &&
+    typeof r.status === "string" &&
+    typeof r.createdAt === "string" &&
+    typeof r.snapshot === "object" &&
+    r.snapshot !== null
+  );
+};

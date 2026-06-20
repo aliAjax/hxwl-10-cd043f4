@@ -3,7 +3,7 @@ import type { DraftRecord, DraftFormData } from "./types";
 export type { DraftRecord, DraftFormData };
 
 const DB_NAME = "ArchaeologyDraftDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "drafts";
 
 export const isIndexedDBSupported = (): boolean => {
@@ -33,6 +33,7 @@ const openDB = (): Promise<IDBDatabase> => {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
 
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, {
@@ -41,6 +42,27 @@ const openDB = (): Promise<IDBDatabase> => {
         });
         store.createIndex("trenchNumber", "trenchNumber", { unique: false });
         store.createIndex("savedAt", "savedAt", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains("exportTasks")) {
+        const tasksStore = db.createObjectStore("exportTasks", {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        tasksStore.createIndex("taskType", "taskType", { unique: false });
+        tasksStore.createIndex("status", "status", { unique: false });
+        tasksStore.createIndex("createdAt", "createdAt", { unique: false });
+        tasksStore.createIndex("projectId", "snapshot.projectId", { unique: false });
+      }
+
+      if (oldVersion < 2 && db.objectStoreNames.contains("exportTasks")) {
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
+        if (transaction) {
+          const store = transaction.objectStore("exportTasks");
+          if (!store.indexNames.contains("projectId")) {
+            store.createIndex("projectId", "snapshot.projectId", { unique: false });
+          }
+        }
       }
     };
   });
