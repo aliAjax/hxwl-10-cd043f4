@@ -641,6 +641,7 @@ const buildRisks = (
   nodes: Map<string, ChronologyNode>,
   cycles: ChronologyCycle[],
   namingConflicts: ChronologyNamingConflict[],
+  directEdges: ChronologyEdge[],
   inferredEdges: ChronologyEdge[],
   order: ChronologyOrderItem[],
   relations: StratumRelation[],
@@ -708,9 +709,9 @@ const buildRisks = (
   });
 
   const relationNodeKeys = new Set<string>();
-  relations.forEach((r) => {
-    relationNodeKeys.add(normalizeNodeKey(r.stratumA));
-    relationNodeKeys.add(normalizeNodeKey(r.stratumB));
+  directEdges.forEach((edge) => {
+    relationNodeKeys.add(edge.sourceKey);
+    relationNodeKeys.add(edge.targetKey);
   });
 
   const orphanNodes: ChronologyNode[] = [];
@@ -773,14 +774,14 @@ export const runChronologyInference = (
   const cycles = detectCycles(nodeMap, adjacency);
   const { order, inferredEdges, totalLayers } = topologicalSort(nodeMap, adjacency, cycles);
   const namingConflicts = detectNamingConflicts(records);
-  const risks = buildRisks(nodeMap, cycles, namingConflicts, inferredEdges, order, relations, records, weakEdges.length);
+  const risks = buildRisks(nodeMap, cycles, namingConflicts, directEdges, inferredEdges, order, relations, records, weakEdges.length);
 
   const nodesArray = Array.from(nodeMap.values());
   const unreviewedCount = nodesArray.filter((n) => n.hasUnreviewed).length;
   const relationNodeSet = new Set<string>();
-  relations.forEach((r) => {
-    relationNodeSet.add(normalizeNodeKey(r.stratumA));
-    relationNodeSet.add(normalizeNodeKey(r.stratumB));
+  directEdges.forEach((edge) => {
+    relationNodeSet.add(edge.sourceKey);
+    relationNodeSet.add(edge.targetKey);
   });
   const orphanCount = nodesArray.filter((n) => !relationNodeSet.has(n.key) && n.artifactCount > 0).length;
 
