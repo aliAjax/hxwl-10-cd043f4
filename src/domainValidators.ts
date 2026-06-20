@@ -261,17 +261,17 @@ export const checkStratumRelationConflict = (
 ): StratumConflictResult => {
   const labelA = RELATION_LABEL_MAP[relationType];
 
+  if (stratumA === stratumB) {
+    return {
+      hasConflict: true,
+      conflictKind: "stratum_self_reference",
+      message: `关系地层A与地层B相同（"${stratumA}"）`,
+    };
+  }
+
   for (const r of allRelations) {
     const rLabelA = `"${r.stratumA}" ${RELATION_LABEL_MAP[r.relationType]} "${r.stratumB}"`;
     const newLabel = `"${stratumA}" ${labelA} "${stratumB}"`;
-
-    if (stratumA === stratumB) {
-      return {
-        hasConflict: true,
-        conflictKind: "stratum_self_reference",
-        message: `关系地层A与地层B相同（"${stratumA}"）`,
-      };
-    }
 
     if (
       r.stratumA === stratumA &&

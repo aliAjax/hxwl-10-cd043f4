@@ -60,7 +60,20 @@ import {
   type ValidatedArtifactRecord,
 } from "./domainValidators";
 
-
+const formatDateTime = (isoString: string): string => {
+  try {
+    return new Date(isoString).toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return isoString;
+  }
+};
 
 const HEADER_ALIASES: Record<string, string> = {
   "探方": "trenchNumber", "探方编号": "trenchNumber", "trench": "trenchNumber", "trenchnumber": "trenchNumber",
@@ -3102,7 +3115,7 @@ function App() {
                             )}
                           </div>
                           <div className="draft-card-time">
-                            {draft.savedAt}
+                            {formatDateTime(draft.savedAt)}
                           </div>
                         </div>
                         

@@ -99,8 +99,10 @@ const appendWeakRelicEdges = (
     const relicNode = nodes.get(we.relicKey);
     if (!stratumNode || !relicNode) return;
 
-    const existing = adjacency.get(we.stratumKey) || [];
-    const hasDirect = existing.some((e) => e.targetKey === we.relicKey);
+    const existingFromRelic = adjacency.get(we.relicKey) || [];
+    const existingFromStratum = adjacency.get(we.stratumKey) || [];
+    const hasDirect = existingFromRelic.some((e) => e.targetKey === we.stratumKey) ||
+                      existingFromStratum.some((e) => e.targetKey === we.relicKey);
     if (hasDirect) return;
 
     const edgeId = `edge-weak-${we.stratumKey}-${we.relicKey}`;
@@ -708,6 +710,7 @@ const buildRisks = (
     });
   });
 
+  const userDirectEdgeCount = directEdges.filter((e) => !e.id.startsWith("edge-weak-")).length;
   const relationNodeKeys = new Set<string>();
   directEdges.forEach((edge) => {
     relationNodeKeys.add(edge.sourceKey);
@@ -715,11 +718,13 @@ const buildRisks = (
   });
 
   const orphanNodes: ChronologyNode[] = [];
-  nodes.forEach((node) => {
-    if (!relationNodeKeys.has(node.key) && node.artifactCount > 0) {
-      orphanNodes.push(node);
-    }
-  });
+  if (userDirectEdgeCount > 0) {
+    nodes.forEach((node) => {
+      if (!relationNodeKeys.has(node.key) && node.artifactCount > 0) {
+        orphanNodes.push(node);
+      }
+    });
+  }
 
   orphanNodes.forEach((node) => {
     const kindLabel = node.kind === "relic_unit" ? "遗迹单位" : "地层";

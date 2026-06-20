@@ -78,10 +78,10 @@ export const saveDraft = (
       const transaction = db.transaction(STORE_NAME, "readwrite");
       const store = transaction.objectStore(STORE_NAME);
 
-      const now = new Date().toLocaleString("zh-CN");
+      const now = new Date().toISOString();
       const draftName =
         draftData.draftName ||
-        `${draftData.trenchNumber || "未命名"}-${now.split(" ")[0]}`;
+        `${draftData.trenchNumber || "未命名"}-${now.split("T")[0]}`;
 
       const record: Omit<DraftRecord, "id"> & { id?: number } = {
         ...draftData,
