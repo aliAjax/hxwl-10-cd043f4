@@ -15,7 +15,7 @@ import { runChronologyInference } from "../chronologyInference";
 const COORD_PREFIXES = new Set(["e", "n", "w", "s", "东", "北", "西", "南"]);
 const COORD_SUFFIXES = new Set(["m", "cm", "mm", "米", "厘米", "毫米"]);
 
-const isValidCoordinateFormat = (
+export const isValidCoordinateFormat = (
   value: string
 ): { valid: boolean; reason?: string } => {
   if (!value || value.trim() === "") {
