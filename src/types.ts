@@ -319,6 +319,7 @@ export interface OverviewState {
   roleViews: Record<UserRole, RoleBasedViewData>;
   overallProgress: number;
   lastUpdated: string;
+  chronologyReport?: ChronologyInferenceReport;
 }
 
 // 总览筛选条件
@@ -466,3 +467,116 @@ export const isExportTaskRecord = (
     r.snapshot !== null
   );
 };
+
+// ============================================================
+// 跨探方地层年代一致性推断 - 类型定义
+// ============================================================
+
+export type ChronologyNodeKind = "stratum" | "relic_unit";
+
+export type ChronologyRiskLevel = "critical" | "warning" | "info";
+
+export type ChronologyRiskType =
+  | "circular_dependency"
+  | "naming_conflict"
+  | "unreviewed_in_chain"
+  | "orphan_node"
+  | "inferred_relation";
+
+export interface ChronologyNode {
+  key: string;
+  name: string;
+  kind: ChronologyNodeKind;
+  trenchNumber?: string;
+  artifactCount: number;
+  approvedArtifactCount: number;
+  pendingArtifactCount: number;
+  rejectedArtifactCount: number;
+  hasUnreviewed: boolean;
+  relatedRelationIds: number[];
+}
+
+export interface ChronologyEdge {
+  id: string;
+  sourceKey: string;
+  targetKey: string;
+  sourceName: string;
+  targetName: string;
+  relationType: RelationType;
+  isDirect: boolean;
+  isInferred: boolean;
+  supportingRelationIds: number[];
+  explanation: string;
+}
+
+export interface ChronologyCycle {
+  id: string;
+  nodeKeys: string[];
+  nodeNames: string[];
+  involvedRelationIds: number[];
+  pathEdges: { from: string; to: string; type: RelationType; relationId?: number }[];
+}
+
+export interface ChronologyNamingConflict {
+  id: string;
+  name: string;
+  occurrences: {
+    trenchNumber?: string;
+    artifactCount: number;
+    sampleRecordId?: number;
+  }[];
+}
+
+export interface ChronologyRisk {
+  id: string;
+  type: ChronologyRiskType;
+  level: ChronologyRiskLevel;
+  title: string;
+  message: string;
+  trenchNumber?: string;
+  nodeKey?: string;
+  nodeName?: string;
+  relationIds?: number[];
+  recordIds?: number[];
+  details?: Record<string, unknown>;
+}
+
+export interface ChronologyOrderItem {
+  rank: number;
+  layerGroup: number;
+  nodeKey: string;
+  nodeName: string;
+  trenchNumber?: string;
+  kind: ChronologyNodeKind;
+  artifactCount: number;
+  evidenceEdges: ChronologyEdge[];
+  isUncertain: boolean;
+  explanation: string;
+}
+
+export interface ChronologyInferenceReport {
+  generatedAt: string;
+  nodes: ChronologyNode[];
+  directEdges: ChronologyEdge[];
+  inferredEdges: ChronologyEdge[];
+  orderedSequence: ChronologyOrderItem[];
+  cycles: ChronologyCycle[];
+  namingConflicts: ChronologyNamingConflict[];
+  risks: ChronologyRisk[];
+  hasInconsistency: boolean;
+  totalLayers: number;
+  nodesWithUncertainty: string[];
+  summary: {
+    totalNodes: number;
+    totalDirectRelations: number;
+    totalInferredRelations: number;
+    cycleCount: number;
+    namingConflictCount: number;
+    riskCount: number;
+    criticalRiskCount: number;
+    warningRiskCount: number;
+    infoRiskCount: number;
+    unreviewedNodeCount: number;
+    orphanNodeCount: number;
+  };
+}

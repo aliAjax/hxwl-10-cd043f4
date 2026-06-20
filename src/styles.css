@@ -6021,3 +6021,624 @@ button:disabled {
   }
 }
 
+/* ============================================================
+   跨探方地层年代一致性推断报告样式
+   ============================================================ */
+
+.chronology-report-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.chronology-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.chronology-report-header h3 {
+  margin: 0;
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.chronology-status-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chronology-status-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.chronology-status-bad {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.chronology-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.chronology-summary-card {
+  background: #fafbfd;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chrono-card-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.chrono-card-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.chrono-card-desc {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.chrono-card-ok {
+  border-left: 3px solid #047857;
+}
+
+.chrono-card-warn {
+  border-left: 3px solid #d97706;
+}
+
+.chrono-card-danger {
+  border-left: 3px solid #e11d48;
+}
+
+.chrono-block-title {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #334155;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chrono-block-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.chronology-risks-block,
+.chronology-conflicts-block,
+.chronology-sequence-block,
+.chronology-inferred-block,
+.chronology-uncertainty-block {
+  background: #fafbfd;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.chrono-risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chrono-risk-item {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  border-left-width: 3px;
+}
+
+.chrono-risk-critical {
+  border-left-color: #e11d48;
+  background: #fff1f2;
+}
+
+.chrono-risk-warning {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
+.chrono-risk-info {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+
+.chrono-risk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.chrono-risk-level-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.level-critical {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.level-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.level-info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.chrono-risk-type {
+  font-weight: 600;
+  font-size: 13px;
+  color: #334155;
+}
+
+.chrono-risk-trench {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.chrono-risk-message {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.chrono-conflict-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chrono-conflict-item {
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.chrono-conflict-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 6px;
+}
+
+.chrono-conflict-occurrences {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.chrono-conflict-occurrences li {
+  margin-bottom: 3px;
+}
+
+.chrono-sequence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.chrono-layer-group {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 2px;
+  overflow: hidden;
+}
+
+.chrono-layer-group + .chrono-layer-group::before {
+  content: "↓";
+  display: block;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 16px;
+  padding: 4px 0;
+  background: #fafbfd;
+}
+
+.chrono-layer-header {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.chrono-layer-cycle {
+  border: 1px dashed #e11d48;
+  background: #fff1f2;
+}
+
+.chrono-layer-cycle .chrono-layer-header {
+  background: #ffe4e6;
+  border-bottom-color: #fecdd3;
+}
+
+.chrono-layer-badge {
+  background: var(--primary);
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chrono-layer-cycle .chrono-layer-badge {
+  background: #e11d48;
+}
+
+.chrono-layer-desc {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.chrono-layer-items {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chrono-item-detail {
+  background: #fafbfd;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+
+.chrono-item-uncertain {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.chrono-item-summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+}
+
+.chrono-item-summary::-webkit-details-marker {
+  display: none;
+}
+
+.chrono-item-summary::before {
+  content: "▶";
+  font-size: 10px;
+  color: #94a3b8;
+  transition: transform 0.15s;
+}
+
+.chrono-item-detail[open] > .chrono-item-summary::before {
+  transform: rotate(90deg);
+}
+
+.chrono-item-kind {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kind-stratum {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.kind-relic_unit {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.chrono-item-name {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.chrono-item-trench {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.chrono-item-count {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.chrono-item-uncertain-tag {
+  font-size: 11px;
+  color: #b45309;
+  font-weight: 600;
+}
+
+.chrono-item-explanation {
+  padding: 8px 12px 12px 28px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.chrono-item-explanation p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.chrono-evidence-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.chrono-evidence-list li {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.chrono-empty-hint {
+  text-align: center;
+  padding: 30px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.chrono-inferred-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.chrono-inferred-item {
+  padding: 8px 10px;
+  border-bottom: 1px dashed #e2e8f0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.chrono-inferred-item:last-child {
+  border-bottom: none;
+}
+
+.chrono-inferred-arrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.chrono-inferred-explain {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.chrono-inferred-more {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.chronology-uncertainty-block p {
+  margin: 0;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.7;
+  background: #fffbeb;
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid #fde68a;
+}
+
+/* ============================================================
+   总览界面地层年代推断面板样式
+   ============================================================ */
+
+.chronology-overview-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.chrono-overview-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.chrono-overview-badge-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.chrono-overview-bad {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.chrono-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.chrono-overview-item {
+  background: #fafbfd;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+}
+
+.chrono-overview-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.chrono-overview-label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.chrono-overview-risks,
+.chrono-overview-sequence {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.chrono-overview-risks-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.chrono-overview-risks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chrono-overview-risk {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.chrono-overview-risk-critical {
+  background: #fff1f2;
+  color: #9f1239;
+  border-left: 3px solid #e11d48;
+}
+
+.chrono-overview-risk-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border-left: 3px solid #f59e0b;
+}
+
+.chrono-overview-risk-more {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 4px;
+}
+
+.chrono-overview-sequence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chrono-overview-seq-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.chrono-seq-layer {
+  background: var(--primary);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 28px;
+  text-align: center;
+}
+
+.chrono-seq-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.chrono-seq-trench {
+  font-size: 11px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.chrono-seq-warn {
+  color: #f59e0b;
+  margin-left: auto;
+}
+
+.chrono-seq-uncertain {
+  background: #fffbeb;
+  border: 1px dashed #fbbf24;
+}
+
+.chrono-overview-seq-more {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 4px;
+}
+

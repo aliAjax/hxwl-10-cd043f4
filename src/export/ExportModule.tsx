@@ -39,6 +39,25 @@ const categoryLabels: Record<string, string> = {
   orphan_stratum: "孤立地层（无关系）",
 };
 
+const chronologyRiskTypeLabels: Record<string, string> = {
+  circular_dependency: "循环依赖",
+  naming_conflict: "跨探方命名冲突",
+  unreviewed_in_chain: "含未审核记录",
+  orphan_node: "孤立地层/遗迹",
+  inferred_relation: "推断关系",
+};
+
+const chronologyRiskLevelLabels: Record<string, string> = {
+  critical: "严重",
+  warning: "警告",
+  info: "提示",
+};
+
+const chronologyNodeKindLabels: Record<string, string> = {
+  stratum: "地层",
+  relic_unit: "遗迹单位",
+};
+
 const categoryAffectedRoles: Record<IssueCategory, UserRole[]> = {
   missing_trench_number: ["excavator"],
   empty_trench_number: ["excavator"],
@@ -1101,6 +1120,272 @@ export default function ExportModule(props: ExportModuleProps) {
               </div>
             )}
           </div>
+
+          {report?.chronologyReport && (
+            <div className="chronology-report-section">
+              <div className="chronology-report-header">
+                <h3>📊 跨探方地层年代一致性推断报告</h3>
+                <span
+                  className={`chronology-status-chip ${
+                    report.chronologyReport.hasInconsistency
+                      ? "chronology-status-bad"
+                      : "chronology-status-ok"
+                  }`}
+                >
+                  {report.chronologyReport.hasInconsistency
+                    ? "⚠ 存在不一致"
+                    : "✅ 推断完成"}
+                </span>
+              </div>
+
+              <div className="chronology-summary-grid">
+                <div className="chronology-summary-card">
+                  <span className="chrono-card-label">涉及层位/遗迹</span>
+                  <span className="chrono-card-value">
+                    {report.chronologyReport.summary.totalNodes}
+                  </span>
+                  <span className="chrono-card-desc">
+                    地层 {report.chronologyReport.nodes.filter((n) => n.kind === "stratum").length} 个 ·
+                    遗迹 {report.chronologyReport.nodes.filter((n) => n.kind === "relic_unit").length} 个
+                  </span>
+                </div>
+                <div className="chronology-summary-card">
+                  <span className="chrono-card-label">直接年代关系</span>
+                  <span className="chrono-card-value">
+                    {report.chronologyReport.summary.totalDirectRelations}
+                  </span>
+                  <span className="chrono-card-desc">
+                    推断关系 {report.chronologyReport.summary.totalInferredRelations} 条
+                  </span>
+                </div>
+                <div className="chronology-summary-card">
+                  <span className="chrono-card-label">年代分层</span>
+                  <span className="chrono-card-value">
+                    {report.chronologyReport.totalLayers || 0}
+                  </span>
+                  <span className="chrono-card-desc">
+                    共分 {report.chronologyReport.totalLayers || 0} 组相对层位
+                  </span>
+                </div>
+                <div
+                  className={`chronology-summary-card ${
+                    report.chronologyReport.summary.criticalRiskCount > 0
+                      ? "chrono-card-danger"
+                      : report.chronologyReport.summary.warningRiskCount > 0
+                      ? "chrono-card-warn"
+                      : "chrono-card-ok"
+                  }`}
+                >
+                  <span className="chrono-card-label">风险项</span>
+                  <span className="chrono-card-value">
+                    {report.chronologyReport.summary.riskCount}
+                  </span>
+                  <span className="chrono-card-desc">
+                    严重 {report.chronologyReport.summary.criticalRiskCount} ·
+                    警告 {report.chronologyReport.summary.warningRiskCount} ·
+                    提示 {report.chronologyReport.summary.infoRiskCount}
+                  </span>
+                </div>
+              </div>
+
+              {report.chronologyReport.risks.length > 0 && (
+                <div className="chronology-risks-block">
+                  <h4 className="chrono-block-title">⚠ 风险提示</h4>
+                  <div className="chrono-risk-list">
+                    {report.chronologyReport.risks.map((risk) => (
+                      <div
+                        key={risk.id}
+                        className={`chrono-risk-item chrono-risk-${risk.level}`}
+                      >
+                        <div className="chrono-risk-head">
+                          <span
+                            className={`chrono-risk-level-tag level-${risk.level}`}
+                          >
+                            {chronologyRiskLevelLabels[risk.level]}
+                          </span>
+                          <span className="chrono-risk-type">
+                            {chronologyRiskTypeLabels[risk.type] || risk.type}
+                          </span>
+                          {risk.trenchNumber && (
+                            <span className="chrono-risk-trench">
+                              探方 {risk.trenchNumber}
+                            </span>
+                          )}
+                        </div>
+                        <p className="chrono-risk-message">{risk.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {report.chronologyReport.namingConflicts.length > 0 && (
+                <div className="chronology-conflicts-block">
+                  <h4 className="chrono-block-title">🔀 跨探方命名冲突</h4>
+                  <div className="chrono-conflict-list">
+                    {report.chronologyReport.namingConflicts.map((nc) => (
+                      <div key={nc.id} className="chrono-conflict-item">
+                        <div className="chrono-conflict-name">
+                          <strong>{nc.name}</strong>
+                        </div>
+                        <ul className="chrono-conflict-occurrences">
+                          {nc.occurrences.map((o, idx) => (
+                            <li key={idx}>
+                              📍 {o.trenchNumber || "未知探方"}
+                              （出土物 {o.artifactCount} 件
+                              {o.sampleRecordId ? `，示例记录 #${o.sampleRecordId}` : ""}
+                              ）
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="chronology-sequence-block">
+                <h4 className="chrono-block-title">
+                  📜 推断相对年代序列
+                  <span className="chrono-block-hint">
+                    （按从早到晚排序，可展开查看推断依据）
+                  </span>
+                </h4>
+
+                {report.chronologyReport.orderedSequence.length === 0 ? (
+                  <div className="chrono-empty-hint">
+                    暂无足够的地层关系数据，无法进行年代排序。请先录入地层关系。
+                  </div>
+                ) : (
+                  <div className="chrono-sequence-list">
+                    {(() => {
+                      const groups = new Map<number, typeof report.chronologyReport.orderedSequence>();
+                      report.chronologyReport.orderedSequence.forEach((item) => {
+                        const key = item.layerGroup;
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key)!.push(item);
+                      });
+                      const sortedKeys = Array.from(groups.keys()).sort((a, b) => a - b);
+                      return sortedKeys.map((layerKey) => {
+                        const items = groups.get(layerKey)!;
+                        const isCycle = layerKey === -1;
+                        return (
+                          <div
+                            key={`layer-${layerKey}`}
+                            className={`chrono-layer-group ${
+                              isCycle ? "chrono-layer-cycle" : ""
+                            }`}
+                          >
+                            <div className="chrono-layer-header">
+                              <span className="chrono-layer-badge">
+                                {isCycle ? "⚠ 循环" : `第 ${items[0].rank} 层`}
+                              </span>
+                              {!isCycle && (
+                                <span className="chrono-layer-desc">
+                                  {items.length} 个层位/遗迹（同期）
+                                </span>
+                              )}
+                              {isCycle && (
+                                <span className="chrono-layer-desc">
+                                  存在循环依赖，年代无法确定
+                                </span>
+                              )}
+                            </div>
+                            <div className="chrono-layer-items">
+                              {items.map((item) => (
+                                <details
+                                  key={item.nodeKey}
+                                  className={`chrono-item-detail ${
+                                    item.isUncertain ? "chrono-item-uncertain" : ""
+                                  }`}
+                                >
+                                  <summary className="chrono-item-summary">
+                                    <span
+                                      className={`chrono-item-kind kind-${item.kind}`}
+                                    >
+                                      {chronologyNodeKindLabels[item.kind]}
+                                    </span>
+                                    <strong className="chrono-item-name">
+                                      {item.nodeName}
+                                    </strong>
+                                    {item.trenchNumber && (
+                                      <span className="chrono-item-trench">
+                                        [{item.trenchNumber}]
+                                      </span>
+                                    )}
+                                    <span className="chrono-item-count">
+                                      {item.artifactCount} 件出土物
+                                    </span>
+                                    {item.isUncertain && (
+                                      <span className="chrono-item-uncertain-tag">
+                                        ⚠ 不确定
+                                      </span>
+                                    )}
+                                  </summary>
+                                  <div className="chrono-item-explanation">
+                                    <p>{item.explanation}</p>
+                                    {item.evidenceEdges.length > 0 && (
+                                      <ul className="chrono-evidence-list">
+                                        {item.evidenceEdges.map((edge) => (
+                                          <li key={edge.id}>
+                                            {edge.isInferred
+                                              ? "[推断] "
+                                              : "[直接] "}
+                                            {edge.explanation}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                </details>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {report.chronologyReport.inferredEdges.length > 0 && (
+                <div className="chronology-inferred-block">
+                  <h4 className="chrono-block-title">
+                    🔗 推断传递关系（{report.chronologyReport.inferredEdges.length} 条）
+                  </h4>
+                  <ul className="chrono-inferred-list">
+                    {report.chronologyReport.inferredEdges.slice(0, 50).map((edge) => (
+                      <li key={edge.id} className="chrono-inferred-item">
+                        <span className="chrono-inferred-arrow">
+                          "{edge.sourceName}" → "{edge.targetName}"
+                        </span>
+                        <span className="chrono-inferred-explain">
+                          {edge.explanation}
+                        </span>
+                      </li>
+                    ))}
+                    {report.chronologyReport.inferredEdges.length > 50 && (
+                      <li className="chrono-inferred-more">
+                        ... 另有 {report.chronologyReport.inferredEdges.length - 50} 条推断关系
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {report.chronologyReport.nodesWithUncertainty.length > 0 && (
+                <div className="chronology-uncertainty-block">
+                  <h4 className="chrono-block-title">
+                    ⚠ 推断结果存在不确定性的节点
+                  </h4>
+                  <p>
+                    以下节点的年代推断存在不确定性，建议优先处理：
+                    {report.chronologyReport.nodesWithUncertainty.join("、")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="report-schema-note">
             <details>

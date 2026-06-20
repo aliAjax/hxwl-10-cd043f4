@@ -44,7 +44,10 @@ import {
   type OverviewFilters,
   batchImportHeaders,
   type ExceptionAction,
+  type ChronologyInferenceReport,
+  type ChronologyRisk,
 } from "./types";
+import { runChronologyInference } from "./chronologyInference";
 
 
 
@@ -1174,6 +1177,45 @@ const generateRoleViewData = (
   };
 };
 
+const chronoRiskToAnomaly = (
+  risk: ChronologyRisk,
+  now: string
+): AnomalyRecord | null => {
+  if (risk.type === "inferred_relation") return null;
+
+  const typeMap: Record<string, AnomalyType> = {
+    circular_dependency: "stratum_conflict",
+    naming_conflict: "stratum_conflict",
+    unreviewed_in_chain: "unreviewed_record",
+    orphan_node: "incomplete_relation",
+  };
+
+  const severityMap: Record<string, AnomalyRecord["severity"]> = {
+    critical: "critical",
+    warning: "warning",
+    info: "warning",
+  };
+
+  const roleMap: Record<string, UserRole[]> = {
+    circular_dependency: ["leader"],
+    naming_conflict: ["leader", "excavator"],
+    unreviewed_in_chain: ["leader"],
+    orphan_node: ["leader", "archivist"],
+  };
+
+  return {
+    id: `chrono-${risk.id}`,
+    type: typeMap[risk.type] || "stratum_conflict",
+    trenchNumber: risk.trenchNumber,
+    stratum: risk.nodeName,
+    recordId: risk.recordIds?.[0],
+    severity: severityMap[risk.level] || "warning",
+    message: `[年代推断] ${risk.message}`,
+    affectedRole: roleMap[risk.type] || ["leader"],
+    createdAt: now,
+  };
+};
+
 const generateOverviewState = (
   records: ArtifactRecord[],
   relations: StratumRelation[],
@@ -1185,6 +1227,13 @@ const generateOverviewState = (
   const pendingRelations = generatePendingRelations(records, relations);
   const pendingArchives = generatePendingArchives(records);
   const unorganizedStats = generateUnorganizedStats(records, validatedRecords);
+  const chronologyReport = runChronologyInference(records, relations);
+
+  const now = new Date().toLocaleString("zh-CN");
+  chronologyReport.risks.forEach((risk) => {
+    const anomaly = chronoRiskToAnomaly(risk, now);
+    if (anomaly) anomalies.push(anomaly);
+  });
 
   const roleViews = {
     excavator: generateRoleViewData(
@@ -1225,6 +1274,7 @@ const generateOverviewState = (
     roleViews,
     overallProgress,
     lastUpdated: new Date().toLocaleString("zh-CN"),
+    chronologyReport,
   };
 };
 

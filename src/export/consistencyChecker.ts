@@ -10,6 +10,7 @@ import type {
   IssueCategory,
   IssueSeverity,
 } from "./types";
+import { runChronologyInference } from "../chronologyInference";
 
 const COORD_PREFIXES = new Set(["e", "n", "w", "s", "东", "北", "西", "南"]);
 const COORD_SUFFIXES = new Set(["m", "cm", "mm", "米", "厘米", "毫米"]);
@@ -312,6 +313,58 @@ const checkReviewStatus = (
   });
 };
 
+const checkChronology = (
+  input: DataCollectionInput,
+  issues: ConsistencyIssue[]
+): ReturnType<typeof runChronologyInference> => {
+  const chronoReport = runChronologyInference(input.artifactRecords, input.stratumRelations);
+
+  chronoReport.cycles.forEach((cycle) => {
+    issues.push(
+      createIssue({
+        severity: "blocking",
+        category: "stratum_relation_conflict",
+        message: `地层年代存在循环依赖：${cycle.nodeNames.join(" → ")} → ${cycle.nodeNames[0]}，关系逻辑矛盾，无法确定年代顺序`,
+        stratumName: cycle.nodeNames[0],
+        details: {
+          chronoCycle: cycle,
+          involvedRelationIds: cycle.involvedRelationIds,
+        },
+      })
+    );
+  });
+
+  chronoReport.namingConflicts.forEach((nc) => {
+    const trenches = nc.occurrences.map((o) => o.trenchNumber || "未知探方").join("、");
+    issues.push(
+      createIssue({
+        severity: "warning",
+        category: "stratum_relation_conflict",
+        message: `跨探方命名冲突：${nc.name} 同时出现在 ${trenches}，请确认是否为同一层位/遗迹`,
+        details: { namingConflict: nc },
+      })
+    );
+  });
+
+  chronoReport.risks
+    .filter((r) => r.type === "unreviewed_in_chain")
+    .forEach((risk) => {
+      issues.push(
+        createIssue({
+          severity: "warning",
+          category: "unreviewed_record",
+          message: `年代推断警告：${risk.message}`,
+          recordId: risk.recordIds?.[0],
+          trenchNumber: risk.trenchNumber,
+          stratumName: risk.nodeName,
+          details: risk.details,
+        })
+      );
+    });
+
+  return chronoReport;
+};
+
 export const runConsistencyChecks = (
   input: DataCollectionInput
 ): ConsistencyReport => {
@@ -322,6 +375,7 @@ export const runConsistencyChecks = (
   checkStratumRelations(input.stratumRelations, issues);
   checkOrphanStrata(input.stratumRelations, input.artifactRecords, issues);
   checkReviewStatus(input.artifactRecords, issues);
+  const chronologyReport = checkChronology(input, issues);
 
   const blockingCount = issues.filter((i) => i.severity === "blocking").length;
   const warningCount = issues.filter((i) => i.severity === "warning").length;
@@ -356,6 +410,7 @@ export const runConsistencyChecks = (
     warningCount,
     issues,
     isExportable: blockingCount === 0,
+    chronologyReport,
   };
 };
 

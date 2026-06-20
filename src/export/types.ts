@@ -11,6 +11,7 @@ import type {
   ExcavationLog,
   SearchFilters,
   UserRole,
+  ChronologyInferenceReport,
 } from "../types";
 
 export type { UserRole };
@@ -87,6 +88,7 @@ export interface ConsistencyReport {
   warningCount: number;
   issues: ConsistencyIssue[];
   isExportable: boolean;
+  chronologyReport?: ChronologyInferenceReport;
 }
 
 export interface ExportOptions {

@@ -9,6 +9,8 @@ import {
   type PendingArchiveItem,
   type OverviewFilters,
   type ExceptionAction,
+  type ChronologyInferenceReport,
+  type ChronologyRisk,
 } from "./types";
 
 const roleNames: Record<UserRole, string> = {
@@ -312,6 +314,106 @@ function UnorganizedStatsPanel({ stats }: { stats: OverviewState["unorganizedSta
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ChronologyOverviewPanel({
+  chronology,
+}: {
+  chronology: ChronologyInferenceReport | undefined;
+}) {
+  if (!chronology) return null;
+
+  const s = chronology.summary;
+  const criticalRisks = chronology.risks.filter((r) => r.level === "critical");
+  const warningRisks = chronology.risks.filter(
+    (r) => r.level === "warning" && r.type !== "unreviewed_in_chain"
+  );
+
+  return (
+    <div className="chronology-overview-panel">
+      <h4 className="panel-subtitle">
+        📊 地层年代推断
+        {chronology.hasInconsistency && (
+          <span className="chrono-overview-badge chrono-overview-bad">⚠ 不一致</span>
+        )}
+        {!chronology.hasInconsistency && (
+          <span className="chrono-overview-badge chrono-overview-badge-ok">✅ 正常</span>
+        )}
+      </h4>
+
+      <div className="chrono-overview-grid">
+        <div className="chrono-overview-item">
+          <span className="chrono-overview-value">{s.totalNodes}</span>
+          <span className="chrono-overview-label">涉及层位/遗迹</span>
+        </div>
+        <div className="chrono-overview-item">
+          <span className="chrono-overview-value">{chronology.totalLayers || 0}</span>
+          <span className="chrono-overview-label">推断年代分层</span>
+        </div>
+        <div className="chrono-overview-item">
+          <span className="chrono-overview-value">{s.totalDirectRelations}</span>
+          <span className="chrono-overview-label">直接关系</span>
+        </div>
+        <div className="chrono-overview-item">
+          <span className="chrono-overview-value">{s.totalInferredRelations}</span>
+          <span className="chrono-overview-label">推断关系</span>
+        </div>
+      </div>
+
+      {(criticalRisks.length > 0 || warningRisks.length > 0) && (
+        <div className="chrono-overview-risks">
+          <div className="chrono-overview-risks-title">⚠ 风险提示</div>
+          <ul className="chrono-overview-risks-list">
+            {[...criticalRisks, ...warningRisks].slice(0, 5).map((risk) => (
+              <li key={risk.id} className={`chrono-overview-risk chrono-overview-risk-${risk.level}`}>
+                <span className="chrono-overview-risk-text">
+                  {risk.message.length > 50
+                    ? risk.message.slice(0, 50) + "..."
+                    : risk.message}
+                </span>
+              </li>
+            ))}
+            {chronology.risks.length > 5 && (
+              <li className="chrono-overview-risk-more">
+                ...另有 {chronology.risks.length - 5} 项风险，详见导出报告
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {chronology.orderedSequence.length > 0 && (
+        <div className="chrono-overview-sequence">
+          <div className="chrono-overview-risks-title">📜 相对年代序列（从早到晚）</div>
+          <div className="chrono-overview-sequence-list">
+            {chronology.orderedSequence
+              .filter((o) => o.layerGroup >= 0)
+              .slice(0, 6)
+              .map((item) => (
+                <div
+                  key={item.nodeKey}
+                  className={`chrono-overview-seq-item ${
+                    item.isUncertain ? "chrono-seq-uncertain" : ""
+                  }`}
+                >
+                  <span className="chrono-seq-layer">L{item.rank}</span>
+                  <span className="chrono-seq-name">{item.nodeName}</span>
+                  {item.trenchNumber && (
+                    <span className="chrono-seq-trench">{item.trenchNumber}</span>
+                  )}
+                  {item.isUncertain && <span className="chrono-seq-warn">⚠</span>}
+                </div>
+              ))}
+            {chronology.orderedSequence.filter((o) => o.layerGroup >= 0).length > 6 && (
+              <div className="chrono-overview-seq-more">
+                ... 共 {chronology.totalLayers} 层，详见完整报告
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -655,6 +757,7 @@ export default function ExcavationOverview({
         </div>
 
         <aside className="overview-sidebar">
+          <ChronologyOverviewPanel chronology={overviewState.chronologyReport} />
           <UnorganizedStatsPanel stats={overviewState.unorganizedStats} />
           <StratumDetailsPanel
             trench={selectedTrenchData}
