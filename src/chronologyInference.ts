@@ -19,6 +19,12 @@ const RELATION_LABEL: Record<RelationType, string> = {
   contains: "包含",
 };
 
+const RELATION_INV_LABEL: Record<RelationType, string> = {
+  earlier: "晚于",
+  breaks: "被打破于",
+  contains: "被包含于",
+};
+
 const genId = (prefix: string): string => {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 };
@@ -40,6 +46,92 @@ interface BuildGraphResult {
   adjacency: Map<string, { targetKey: string; edge: ChronologyEdge }[]>;
   directEdges: ChronologyEdge[];
 }
+
+interface WeakRelicStratumEdge {
+  stratumKey: string;
+  relicKey: string;
+  sharedCount: number;
+  sampleRecordIds: number[];
+  trenchNumber?: string;
+}
+
+const detectWeakRelicStratumRelations = (
+  records: ArtifactRecord[],
+  nodeMap: Map<string, ChronologyNode>
+): WeakRelicStratumEdge[] => {
+  const key = (s: string, r: string) =>
+    `${normalizeNodeKey(s)}||${normalizeNodeKey(r)}`;
+  const edgeMap = new Map<string, WeakRelicStratumEdge>();
+
+  records.forEach((rec) => {
+    if (!rec.stratum?.trim() || !rec.relicUnit?.trim()) return;
+    const sKey = normalizeNodeKey(rec.stratum);
+    const rKey = normalizeNodeKey(rec.relicUnit);
+    if (sKey === rKey) return;
+    if (!nodeMap.has(sKey) || !nodeMap.has(rKey)) return;
+
+    const k = key(rec.stratum, rec.relicUnit);
+    if (!edgeMap.has(k)) {
+      edgeMap.set(k, {
+        stratumKey: sKey,
+        relicKey: rKey,
+        sharedCount: 0,
+        sampleRecordIds: [],
+        trenchNumber: rec.trenchNumber,
+      });
+    }
+    const e = edgeMap.get(k)!;
+    e.sharedCount++;
+    if (e.sampleRecordIds.length < 3) e.sampleRecordIds.push(rec.id);
+  });
+
+  return Array.from(edgeMap.values()).filter((e) => e.sharedCount >= 1);
+};
+
+const appendWeakRelicEdges = (
+  result: BuildGraphResult,
+  weakEdges: WeakRelicStratumEdge[]
+): BuildGraphResult => {
+  const { nodes, adjacency, directEdges } = result;
+
+  weakEdges.forEach((we) => {
+    const stratumNode = nodes.get(we.stratumKey);
+    const relicNode = nodes.get(we.relicKey);
+    if (!stratumNode || !relicNode) return;
+
+    const existing = adjacency.get(we.stratumKey) || [];
+    const hasDirect = existing.some((e) => e.targetKey === we.relicKey);
+    if (hasDirect) return;
+
+    const edgeId = `edge-weak-${we.stratumKey}-${we.relicKey}`;
+    const sharedIdStr = we.sampleRecordIds.map((id) => `#${id}`).join("、");
+    const countNote =
+      we.sampleRecordIds.length < we.sharedCount
+        ? `等共${we.sharedCount}件`
+        : "";
+
+    const explanation = `共出弱关联：出土物记录（${sharedIdStr}${countNote}）同时标注地层"${stratumNode.name}"与遗迹单位"${relicNode.name}"，推断遗迹单位开口于该层或同期（${we.trenchNumber || "探方未知"}）`;
+
+    const edge: ChronologyEdge = {
+      id: edgeId,
+      sourceKey: we.relicKey,
+      targetKey: we.stratumKey,
+      sourceName: relicNode.name,
+      targetName: stratumNode.name,
+      relationType: "earlier",
+      isDirect: false,
+      isInferred: false,
+      supportingRelationIds: [],
+      explanation,
+    };
+
+    if (!adjacency.has(we.relicKey)) adjacency.set(we.relicKey, []);
+    adjacency.get(we.relicKey)!.push({ targetKey: we.stratumKey, edge });
+    directEdges.push(edge);
+  });
+
+  return result;
+};
 
 const buildNodes = (
   records: ArtifactRecord[],
@@ -118,20 +210,42 @@ const relationToEarlierEdge = (
       return {
         earlierKey: a,
         laterKey: b,
-        explanation: `"${relation.stratumA}" 早于 "${relation.stratumB}"（关系 #${relation.id}）`,
+        explanation: `地层学证据："${relation.stratumA}" 直接标注为早于 "${relation.stratumB}"（关系#${relation.id}）`,
       };
-    case "breaks":
+    case "breaks": {
+      const aIsRelic = detectNodeKind(relation.stratumA) === "relic_unit";
+      const bIsRelic = detectNodeKind(relation.stratumB) === "relic_unit";
+      let detail = "";
+      if (aIsRelic && !bIsRelic) {
+        detail = `（遗迹单位 ${relation.stratumA} 打破地层 ${relation.stratumB}，故 ${relation.stratumB} 形成年代更早）`;
+      } else if (!aIsRelic && bIsRelic) {
+        detail = `（地层 ${relation.stratumA} 打破遗迹单位 ${relation.stratumB}，故 ${relation.stratumB} 年代更早）`;
+      } else {
+        detail = `（按打破法则：被打破者形成年代更早）`;
+      }
       return {
         earlierKey: b,
         laterKey: a,
-        explanation: `"${relation.stratumA}" 打破 "${relation.stratumB}"，说明 "${relation.stratumB}" 年代更早（关系 #${relation.id}）`,
+        explanation: `打破关系："${relation.stratumA}" 打破 "${relation.stratumB}"${detail}（关系#${relation.id}）`,
       };
-    case "contains":
+    }
+    case "contains": {
+      const aIsRelic = detectNodeKind(relation.stratumA) === "relic_unit";
+      const bIsRelic = detectNodeKind(relation.stratumB) === "relic_unit";
+      let detail = "";
+      if (!aIsRelic && bIsRelic) {
+        detail = `（地层 ${relation.stratumA} 包含遗迹单位 ${relation.stratumB}，该遗迹单位形成于地层堆积之前或同期）`;
+      } else if (aIsRelic && bIsRelic) {
+        detail = `（遗迹单位 ${relation.stratumA} 内含遗迹单位 ${relation.stratumB}，按层位关系推断 ${relation.stratumB} 更早）`;
+      } else {
+        detail = `（被包含者通常形成于或早于包含者堆积时期）`;
+      }
       return {
         earlierKey: b,
         laterKey: a,
-        explanation: `"${relation.stratumA}" 包含 "${relation.stratumB}"，说明被包含者年代更早或同期（关系 #${relation.id}）`,
+        explanation: `包含关系："${relation.stratumA}" 包含 "${relation.stratumB}"${detail}（关系#${relation.id}）`,
       };
+    }
     default:
       return null;
   }
@@ -288,9 +402,11 @@ const topologicalSort = (
   });
 
   const inferredEdges: ChronologyEdge[] = [];
-  const reachableFrom = new Map<string, Set<string>>();
+  const reachableFrom = new Map<string, Map<string, string[]>>();
   nodeMap.forEach((_, key) => {
-    reachableFrom.set(key, new Set([key]));
+    const m = new Map<string, string[]>();
+    m.set(key, [key]);
+    reachableFrom.set(key, m);
   });
 
   let processedCount = 0;
@@ -304,15 +420,19 @@ const topologicalSort = (
     for (const { targetKey, edge } of neighbors) {
       if (cycleNodeKeys.has(targetKey)) continue;
 
-      const reachable = reachableFrom.get(key)!;
-      const targetReachable = reachableFrom.get(targetKey)!;
-      reachable.forEach((k) => {
-        if (k !== targetKey && !targetReachable.has(k)) {
-          targetReachable.add(k);
+      const srcPaths = reachableFrom.get(key)!;
+      const tgtPaths = reachableFrom.get(targetKey)!;
+      srcPaths.forEach((path, k) => {
+        if (k !== targetKey && !tgtPaths.has(k)) {
+          const newPath = [...path, targetKey];
+          tgtPaths.set(k, newPath);
           if (k !== key) {
             const srcNode = nodeMap.get(k);
             const tgtNode = nodeMap.get(targetKey);
             if (srcNode && tgtNode) {
+              const pathNames = newPath
+                .map((pk) => nodeMap.get(pk)?.name || pk)
+                .join(" → ");
               const inferredEdge: ChronologyEdge = {
                 id: `edge-inferred-${k}-${targetKey}`,
                 sourceKey: k,
@@ -323,7 +443,7 @@ const topologicalSort = (
                 isDirect: false,
                 isInferred: true,
                 supportingRelationIds: [...edge.supportingRelationIds],
-                explanation: `由传递性推断："${srcNode.name}" 早于 "${tgtNode}"（通过中间关系链）`,
+                explanation: `传递性推断："${srcNode.name}" → → "${tgtNode.name}"，经中间链 ${pathNames}（基于地层学基本法则：若 A 早于 B，B 早于 C，则 A 早于 C）`,
               };
               inferredEdges.push(inferredEdge);
             }
@@ -360,7 +480,7 @@ const topologicalSort = (
       artifactCount: node.artifactCount,
       evidenceEdges: [],
       isUncertain: true,
-      explanation: `该节点参与循环依赖，年代顺序无法确定`,
+      explanation: `年代冲突：该节点参与地层关系循环，无法进行正常排序。请检查涉及的打破/包含/早于关系是否存在自相矛盾（如 A 打破 B，B 又打破 A）。`,
     });
   });
 
@@ -387,10 +507,27 @@ const topologicalSort = (
 
     let explanation = "";
     if (evidence.length === 0) {
-      explanation = "无直接年代关系，暂列为最早期或独立层位";
+      const kindLabel = node.kind === "relic_unit" ? "遗迹单位" : "地层";
+      explanation = `无年代关系证据：此${kindLabel}"${node.name}"尚未与任何其他层位建立打破/叠压/早于关系，依据拓扑排序法则暂置于最早期层组，实际年代需结合田野记录核实。`;
     } else {
-      const evStr = evidence.map((e) => e.explanation).join("；");
-      explanation = `基于 ${evidence.length} 条关系确定层位：${evStr}`;
+      const directCount = evidence.filter((e) => e.isDirect).length;
+      const inferredCount = evidence.length - directCount;
+      const evidenceSummary: string[] = [];
+      evidence.slice(0, 3).forEach((e) => {
+        const tag = e.isInferred
+          ? "【推】"
+          : e.isDirect
+          ? ""
+          : "【弱】";
+        evidenceSummary.push(`${tag}${e.explanation}`);
+      });
+      if (evidence.length > 3) {
+        evidenceSummary.push(`...另有 ${evidence.length - 3} 条依据`);
+      }
+      const head = directCount > 0
+        ? `排序依据：基于 ${directCount} 条地层关系${inferredCount > 0 ? `与 ${inferredCount} 条推断关系` : ""}`
+        : `排序依据：基于 ${inferredCount} 条推断关系`;
+      explanation = `${head}确认层位——${evidenceSummary.join(" ｜ ")}`;
     }
 
     orderItems.push({
@@ -507,17 +644,21 @@ const buildRisks = (
   inferredEdges: ChronologyEdge[],
   order: ChronologyOrderItem[],
   relations: StratumRelation[],
-  records: ArtifactRecord[]
+  records: ArtifactRecord[],
+  weakEdgeCount: number
 ): ChronologyRisk[] => {
   const risks: ChronologyRisk[] = [];
 
   cycles.forEach((cycle) => {
+    const cycleDesc = cycle.pathEdges && cycle.pathEdges.length > 0
+      ? cycle.pathEdges.map((p: any) => `${p.from} → ${p.to}`).join("  ")
+      : cycle.nodeNames.join(" → ") + " → " + cycle.nodeNames[0];
     risks.push({
       id: genId("risk"),
       type: "circular_dependency",
       level: "critical",
-      title: "循环依赖",
-      message: `地层关系存在循环：${cycle.nodeNames.join(" → ")} → ${cycle.nodeNames[0]}，年代排序无法确定`,
+      title: "循环依赖（年代关系矛盾）",
+      message: `地层关系存在循环矛盾：${cycleDesc}。涉及关系编号：${cycle.involvedRelationIds.map(id => `#${id}`).join("、")}。打破/叠压/包含关系形成闭环，严重违反地层学法则，请逐一审定并修正。`,
       nodeName: cycle.nodeNames[0],
       relationIds: cycle.involvedRelationIds,
       details: { pathEdges: cycle.pathEdges },
@@ -525,13 +666,13 @@ const buildRisks = (
   });
 
   namingConflicts.forEach((nc) => {
-    const trenchList = nc.occurrences.map((o) => `${o.trenchNumber || "未知"}(${o.artifactCount}件)`).join("、");
+    const trenchList = nc.occurrences.map((o) => `${o.trenchNumber || "未知"}(出土${o.artifactCount}件)`).join("、");
     risks.push({
       id: genId("risk"),
       type: "naming_conflict",
       level: "warning",
       title: "跨探方命名冲突",
-      message: `同一${nc.name}出现在不同探方：${trenchList}，请确认是否为同一层位/遗迹`,
+      message: `同一${nc.name}在多个探方均有记录：${trenchList}。若属同一层位/遗迹，请在关系录入中显式建立跨探方叠压/对应关系；若仅编号偶合，请分别命名以避免混淆。`,
       recordIds: nc.occurrences.map((o) => o.sampleRecordId).filter((id): id is number => id !== undefined),
       details: { occurrences: nc.occurrences },
     });
@@ -543,19 +684,25 @@ const buildRisks = (
   });
 
   nodesWithUnreviewed.forEach((node) => {
+    const kindLabel = node.kind === "relic_unit" ? "遗迹单位" : "地层";
+    const rate = node.artifactCount > 0
+      ? `${Math.round((node.pendingArtifactCount / node.artifactCount) * 100)}%`
+      : "—";
     risks.push({
       id: genId("risk"),
       type: "unreviewed_in_chain",
       level: "warning",
       title: "含未审核记录的地层/遗迹",
-      message: `"${node.name}"（${node.trenchNumber || "探方未知"}）存在 ${node.pendingArtifactCount} 件待审核出土物记录，基于此的年代推断可能不准确`,
+      message: `${kindLabel}"${node.name}"（探方：${node.trenchNumber || "未指定"}）共 ${node.artifactCount} 件记录，其中 ${node.pendingArtifactCount} 件待审核（占比${rate}），已通过审核 ${node.approvedArtifactCount} 件，驳回 ${node.rejectedArtifactCount} 件。基于此的统计与年代推断结果可能存在偏差，请优先完成审核。`,
       trenchNumber: node.trenchNumber,
       nodeKey: node.key,
       nodeName: node.name,
       details: {
         pendingCount: node.pendingArtifactCount,
         approvedCount: node.approvedArtifactCount,
+        rejectedCount: node.rejectedArtifactCount,
         totalCount: node.artifactCount,
+        pendingRate: rate,
       },
     });
   });
@@ -574,12 +721,13 @@ const buildRisks = (
   });
 
   orphanNodes.forEach((node) => {
+    const kindLabel = node.kind === "relic_unit" ? "遗迹单位" : "地层";
     risks.push({
       id: genId("risk"),
       type: "orphan_node",
       level: "info",
-      title: "孤立地层/遗迹（无关系）",
-      message: `"${node.name}"（${node.trenchNumber || "探方未知"}）有 ${node.artifactCount} 件出土物，但未建立任何地层关系，无法参与年代排序`,
+      title: "孤立地层/遗迹（未录入年代关系）",
+      message: `${kindLabel}"${node.name}"（${node.trenchNumber || "探方未知"}）有 ${node.artifactCount} 件出土物，但尚未与任何其他层位建立打破/叠压/早于关系。年代推断暂将其归为最早期独立层组，建议补录关系以获得准确排年。`,
       trenchNumber: node.trenchNumber,
       nodeKey: node.key,
       nodeName: node.name,
@@ -587,14 +735,25 @@ const buildRisks = (
     });
   });
 
+  if (weakEdgeCount > 0) {
+    risks.push({
+      id: genId("risk"),
+      type: "inferred_relation",
+      level: "info",
+      title: "自动补充弱关联",
+      message: `基于出土物中地层与遗迹单位的共出记录，系统自动补充了 ${weakEdgeCount} 条共出弱关联。此类关联仅作辅助参考（如灰坑开口于某层），请领队结合实际田野记录核查。`,
+      details: { weakEdgeCount },
+    });
+  }
+
   if (inferredEdges.length > 0) {
     risks.push({
       id: genId("risk"),
       type: "inferred_relation",
       level: "info",
-      title: "存在推断关系",
-      message: `基于传递性共推断出 ${inferredEdges.length} 条间接年代关系，请核实推断结果是否符合实际发掘情况`,
-      details: { inferredCount: inferredEdges.length },
+      title: "存在传递性推断关系",
+      message: `基于地层学传递法则（A 早于 B，B 早于 C ⇒ A 早于 C），系统由 ${relations.length} 条直接关系推断出 ${inferredEdges.length} 条间接年代关系。请核查推断结果（尤其跨探方部分）是否与实际层位叠压相符。`,
+      details: { inferredCount: inferredEdges.length, directCount: relations.length },
     });
   }
 
@@ -606,11 +765,15 @@ export const runChronologyInference = (
   relations: StratumRelation[]
 ): ChronologyInferenceReport => {
   const nodeMap = buildNodes(records, relations);
-  const { adjacency, directEdges } = buildGraph(nodeMap, relations);
+  let buildResult = buildGraph(nodeMap, relations);
+  const weakEdges = detectWeakRelicStratumRelations(records, nodeMap);
+  buildResult = appendWeakRelicEdges(buildResult, weakEdges);
+  const { adjacency, directEdges } = buildResult;
+
   const cycles = detectCycles(nodeMap, adjacency);
   const { order, inferredEdges, totalLayers } = topologicalSort(nodeMap, adjacency, cycles);
   const namingConflicts = detectNamingConflicts(records);
-  const risks = buildRisks(nodeMap, cycles, namingConflicts, inferredEdges, order, relations, records);
+  const risks = buildRisks(nodeMap, cycles, namingConflicts, inferredEdges, order, relations, records, weakEdges.length);
 
   const nodesArray = Array.from(nodeMap.values());
   const unreviewedCount = nodesArray.filter((n) => n.hasUnreviewed).length;
@@ -620,6 +783,9 @@ export const runChronologyInference = (
     relationNodeSet.add(normalizeNodeKey(r.stratumB));
   });
   const orphanCount = nodesArray.filter((n) => !relationNodeSet.has(n.key) && n.artifactCount > 0).length;
+
+  const userDirectEdgeCount = directEdges.filter((e) => !e.id.startsWith("edge-weak-")).length;
+  const weakEdgeCountNow = directEdges.filter((e) => e.id.startsWith("edge-weak-")).length;
 
   const criticalRiskCount = risks.filter((r) => r.level === "critical").length;
   const warningRiskCount = risks.filter((r) => r.level === "warning").length;
@@ -643,7 +809,8 @@ export const runChronologyInference = (
     nodesWithUncertainty,
     summary: {
       totalNodes: nodesArray.length,
-      totalDirectRelations: directEdges.length,
+      totalDirectRelations: userDirectEdgeCount,
+      totalWeakRelations: weakEdgeCountNow,
       totalInferredRelations: inferredEdges.length,
       cycleCount: cycles.length,
       namingConflictCount: namingConflicts.length,

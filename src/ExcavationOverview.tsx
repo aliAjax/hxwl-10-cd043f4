@@ -358,8 +358,16 @@ function ChronologyOverviewPanel({
         </div>
         <div className="chrono-overview-item">
           <span className="chrono-overview-value">{s.totalInferredRelations}</span>
-          <span className="chrono-overview-label">推断关系</span>
+          <span className="chrono-overview-label">推断/传递</span>
         </div>
+        {s.totalWeakRelations && s.totalWeakRelations > 0 && (
+          <div className="chrono-overview-item chrono-overview-item-full">
+            <span className="chrono-overview-value chrono-overview-value-weaker">
+              +{s.totalWeakRelations}
+            </span>
+            <span className="chrono-overview-label">共出弱关联</span>
+          </div>
+        )}
       </div>
 
       {(criticalRisks.length > 0 || warningRisks.length > 0) && (

@@ -1150,12 +1150,19 @@ export default function ExportModule(props: ExportModuleProps) {
                   </span>
                 </div>
                 <div className="chronology-summary-card">
-                  <span className="chrono-card-label">直接年代关系</span>
+                  <span className="chrono-card-label">录入关系</span>
                   <span className="chrono-card-value">
                     {report.chronologyReport.summary.totalDirectRelations}
                   </span>
                   <span className="chrono-card-desc">
-                    推断关系 {report.chronologyReport.summary.totalInferredRelations} 条
+                    共出弱关联{" "}
+                    <span className="chrono-weak-count">
+                      {report.chronologyReport.summary.totalWeakRelations ?? 0}
+                    </span>{" "}
+                    · 传递推断{" "}
+                    <span className="chrono-inferred-count">
+                      {report.chronologyReport.summary.totalInferredRelations}
+                    </span>
                   </span>
                 </div>
                 <div className="chronology-summary-card">
@@ -1326,14 +1333,21 @@ export default function ExportModule(props: ExportModuleProps) {
                                     <p>{item.explanation}</p>
                                     {item.evidenceEdges.length > 0 && (
                                       <ul className="chrono-evidence-list">
-                                        {item.evidenceEdges.map((edge) => (
-                                          <li key={edge.id}>
-                                            {edge.isInferred
-                                              ? "[推断] "
-                                              : "[直接] "}
-                                            {edge.explanation}
-                                          </li>
-                                        ))}
+                                        {item.evidenceEdges.map((edge) => {
+                                          const badge = edge.isInferred
+                                            ? { text: "推断", cls: "badge-inferred" }
+                                            : edge.isDirect
+                                            ? { text: "直接", cls: "badge-direct" }
+                                            : { text: "弱关联", cls: "badge-weak" };
+                                          return (
+                                            <li key={edge.id}>
+                                              <span className={`chrono-evidence-badge ${badge.cls}`}>
+                                                {badge.text}
+                                              </span>
+                                              {edge.explanation}
+                                            </li>
+                                          );
+                                        })}
                                       </ul>
                                     )}
                                   </div>
@@ -1372,6 +1386,39 @@ export default function ExportModule(props: ExportModuleProps) {
                   </ul>
                 </div>
               )}
+
+              {(report.chronologyReport.directEdges.filter((e) => e.id.startsWith("edge-weak-")).length > 0) && (() => {
+                const weakEdges = report.chronologyReport!.directEdges.filter((e) =>
+                  e.id.startsWith("edge-weak-")
+                );
+                return (
+                  <div className="chronology-weak-block">
+                    <h4 className="chrono-block-title">
+                      🪶 共出弱关联（{weakEdges.length} 条，自动补充）
+                    </h4>
+                    <p className="chrono-weak-note">
+                      以下关系由出土物记录中「地层 + 遗迹单位」的共现情况自动推断，仅作辅助参考，请结合田野记录实际确认。
+                    </p>
+                    <ul className="chrono-inferred-list">
+                      {weakEdges.slice(0, 50).map((edge) => (
+                        <li key={edge.id} className="chrono-inferred-item chrono-weak-item">
+                          <span className="chrono-inferred-arrow chrono-weak-arrow">
+                            "{edge.sourceName}" ⇢ "{edge.targetName}"
+                          </span>
+                          <span className="chrono-inferred-explain">
+                            {edge.explanation}
+                          </span>
+                        </li>
+                      ))}
+                      {weakEdges.length > 50 && (
+                        <li className="chrono-inferred-more">
+                          ... 另有 {weakEdges.length - 50} 条共出弱关联
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              })()}
 
               {report.chronologyReport.nodesWithUncertainty.length > 0 && (
                 <div className="chronology-uncertainty-block">

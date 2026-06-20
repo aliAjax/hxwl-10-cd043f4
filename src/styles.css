@@ -6514,6 +6514,15 @@ button:disabled {
   margin-bottom: 14px;
 }
 
+.chrono-overview-item-full {
+  grid-column: span 2;
+}
+
+.chrono-overview-value-weaker {
+  color: #0ea5e9 !important;
+  font-size: 18px !important;
+}
+
 .chrono-overview-item {
   background: #fafbfd;
   border: 1px solid var(--border);
@@ -6633,6 +6642,90 @@ button:disabled {
 .chrono-seq-uncertain {
   background: #fffbeb;
   border: 1px dashed #fbbf24;
+}
+
+.chrono-weak-count {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.chrono-inferred-count {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.chrono-evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chrono-evidence-list li {
+  font-size: 12px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+  line-height: 1.6;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.chrono-evidence-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.chrono-evidence-badge.badge-direct {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.chrono-evidence-badge.badge-weak {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.chrono-evidence-badge.badge-inferred {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.chronology-weak-block {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+.chrono-weak-note {
+  margin: 4px 0 10px 0 !important;
+  font-size: 12px !important;
+  color: #0c4a6e !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  line-height: 1.6 !important;
+}
+
+.chrono-weak-item {
+  background: #fff !important;
+  border: 1px dashed #7dd3fc;
+}
+
+.chrono-weak-arrow {
+  color: #0284c7 !important;
 }
 
 .chrono-overview-seq-more {

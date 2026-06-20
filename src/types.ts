@@ -569,6 +569,7 @@ export interface ChronologyInferenceReport {
   summary: {
     totalNodes: number;
     totalDirectRelations: number;
+    totalWeakRelations?: number;
     totalInferredRelations: number;
     cycleCount: number;
     namingConflictCount: number;

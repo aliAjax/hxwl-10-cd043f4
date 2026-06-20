@@ -1203,11 +1203,17 @@ const chronoRiskToAnomaly = (
     orphan_node: ["leader", "archivist"],
   };
 
+  const effectiveTrench = risk.trenchNumber?.trim()
+    ? risk.trenchNumber
+    : "(跨探方)";
+  const effectiveStratum = risk.nodeName
+    ? risk.nodeName
+    : undefined;
   return {
     id: `chrono-${risk.id}`,
     type: typeMap[risk.type] || "stratum_conflict",
-    trenchNumber: risk.trenchNumber,
-    stratum: risk.nodeName,
+    trenchNumber: effectiveTrench,
+    stratum: effectiveStratum,
     recordId: risk.recordIds?.[0],
     severity: severityMap[risk.level] || "warning",
     message: `[年代推断] ${risk.message}`,
