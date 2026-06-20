@@ -48,6 +48,16 @@ import {
   type ChronologyRisk,
 } from "./types";
 import { runChronologyInference } from "./chronologyInference";
+import {
+  isValidCoordinateFormat,
+  parseCoordinatePoint,
+  validateRecordCoordinates,
+  FIELD_LABELS,
+  REQUIRED_FIELDS,
+  isFieldEmpty,
+  checkStratumRelationConflict,
+  type ValidatedArtifactRecord,
+} from "./domainValidators";
 
 
 
@@ -511,108 +521,6 @@ function MetricCard({ label, value, index }: { label: string; value: string; ind
   );
 }
 
-const parseNumber = (value: string): number | null => {
-  if (!value || value.trim() === "") return null;
-  const clean = value.trim();
-  const match = clean.match(/-?\d+(\.\d+)?/);
-  if (!match) return null;
-  const num = parseFloat(match[0]);
-  return isNaN(num) ? null : num;
-};
-
-const COORD_PREFIXES = new Set(["e", "n", "w", "s", "东", "北", "西", "南"]);
-const COORD_SUFFIXES = new Set(["m", "cm", "mm", "米", "厘米", "毫米"]);
-
-const isValidCoordinateFormat = (value: string): { valid: boolean; extracted: number | null; reason?: string } => {
-  if (!value || value.trim() === "") {
-    return { valid: false, extracted: null, reason: "坐标为空" };
-  }
-  const clean = value.trim();
-  const numMatch = clean.match(/-?\d+(\.\d+)?/);
-  if (!numMatch) {
-    return { valid: false, extracted: null, reason: "未找到有效数字" };
-  }
-  const numStr = numMatch[0];
-  const num = parseFloat(numStr);
-  const numStart = numMatch.index || 0;
-  const numEnd = numStart + numStr.length;
-  const prefix = clean.slice(0, numStart).trim().toLowerCase();
-  const suffix = clean.slice(numEnd).trim().toLowerCase();
-
-  if (prefix && !COORD_PREFIXES.has(prefix)) {
-    return { valid: false, extracted: num, reason: `前缀"${prefix}"不是有效的坐标标识` };
-  }
-  if (suffix && !COORD_SUFFIXES.has(suffix)) {
-    return { valid: false, extracted: num, reason: `后缀"${suffix}"不是有效的单位标识` };
-  }
-  return { valid: true, extracted: num };
-};
-
-interface ValidatedArtifactRecord extends ArtifactRecord {
-  eValue: number | null;
-  nValue: number | null;
-  isCoordinateValid: boolean;
-  coordinateError?: string;
-}
-
-const validateRecordCoordinates = (record: ArtifactRecord): ValidatedArtifactRecord => {
-  const eCheck = isValidCoordinateFormat(record.eCoordinate);
-  const nCheck = isValidCoordinateFormat(record.nCoordinate);
-  const eValue = eCheck.extracted;
-  const nValue = nCheck.extracted;
-  let isCoordinateValid = true;
-  let coordinateError: string | undefined;
-
-  const eEmpty = !record.eCoordinate || record.eCoordinate.trim() === "";
-  const nEmpty = !record.nCoordinate || record.nCoordinate.trim() === "";
-
-  if (eEmpty && nEmpty) {
-    isCoordinateValid = false;
-    coordinateError = "E和N坐标均为空";
-  } else if (eEmpty) {
-    isCoordinateValid = false;
-    coordinateError = "E坐标为空";
-  } else if (nEmpty) {
-    isCoordinateValid = false;
-    coordinateError = "N坐标为空";
-  } else if (!eCheck.valid && !nCheck.valid) {
-    isCoordinateValid = false;
-    coordinateError = `E坐标${eCheck.reason}，N坐标${nCheck.reason}`;
-  } else if (!eCheck.valid) {
-    isCoordinateValid = false;
-    coordinateError = `E坐标${eCheck.reason}`;
-  } else if (!nCheck.valid) {
-    isCoordinateValid = false;
-    coordinateError = `N坐标${nCheck.reason}`;
-  } else if (eValue !== null && nValue !== null && (eValue < 0 || nValue < 0)) {
-    isCoordinateValid = false;
-    coordinateError = "坐标不能为负数";
-  }
-
-  return { ...record, eValue, nValue, isCoordinateValid, coordinateError };
-};
-
-const FIELD_LABELS: Partial<Record<keyof ArtifactRecord, string>> = {
-  eCoordinate: "E坐标",
-  nCoordinate: "N坐标",
-  depth: "深度",
-  artifactType: "出土物类型",
-  stratum: "地层",
-  trenchNumber: "探方编号",
-  quantity: "数量",
-  relicUnit: "遗迹单位",
-  remarks: "备注",
-};
-
-const REQUIRED_FIELDS: (keyof ArtifactRecord)[] = [
-  "trenchNumber",
-  "stratum",
-  "artifactType",
-  "eCoordinate",
-  "nCoordinate",
-  "depth",
-];
-
 const generateMissingFields = (
   records: ArtifactRecord[]
 ): MissingFieldItem[] => {
@@ -622,15 +530,15 @@ const generateMissingFields = (
     if (record.status === "archived") return;
 
     REQUIRED_FIELDS.forEach((field) => {
-      const value = record[field];
-      if (typeof value === "string" && (!value || value.trim() === "")) {
+      if (isFieldEmpty(record, field)) {
+        const value = record[field];
         missingFields.push({
           recordId: record.id,
           trenchNumber: record.trenchNumber,
           stratum: record.stratum,
           fieldName: field,
           fieldLabel: FIELD_LABELS[field] || String(field),
-          currentValue: value || "",
+          currentValue: typeof value === "string" ? value : "",
           artifactType: record.artifactType,
           submittedAt: record.submittedAt,
         });
@@ -700,7 +608,7 @@ const generatePendingRelations = (
   }
 
   relations.forEach((rel) => {
-    const conflict = checkConflictRelationStatic(
+    const conflict = checkStratumRelationConflict(
       rel.stratumA,
       rel.stratumB,
       rel.relationType,
@@ -728,68 +636,6 @@ const generatePendingRelations = (
   });
 
   return pending;
-};
-
-const checkConflictRelationStatic = (
-  a: string,
-  b: string,
-  type: RelationType,
-  allRelations: StratumRelation[]
-): { hasConflict: boolean; message: string } => {
-  const getLabel = (t: RelationType) =>
-    relationTypeOptions.find((o) => o.value === t)?.label || t;
-
-  for (const r of allRelations) {
-    if (r.relationType === type) {
-      if (r.stratumA === b && r.stratumB === a) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${b} ${getLabel(type)} ${a}"，不能同时存在 "${a} ${getLabel(type)} ${b}"`,
-        };
-      }
-    }
-    if (type === "contains" && r.relationType === "contains") {
-      if (r.stratumA === b && r.stratumB === a) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`,
-        };
-      }
-    }
-    if (type === "breaks" && r.relationType === "earlier") {
-      if (r.stratumA === a && r.stratumB === b) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${a} 早于 ${b}"，不能同时存在 "${a} 打破 ${b}"（打破意味着年代更晚）`,
-        };
-      }
-    }
-    if (type === "earlier" && r.relationType === "breaks") {
-      if (r.stratumA === a && r.stratumB === b) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${a} 打破 ${b}"，不能同时存在 "${a} 早于 ${b}"（打破意味着年代更晚）`,
-        };
-      }
-    }
-    if (type === "breaks" && r.relationType === "breaks") {
-      if (r.stratumA === b && r.stratumB === a) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${b} 打破 ${a}"，不能同时存在 "${a} 打破 ${b}"`,
-        };
-      }
-    }
-    if (type === "earlier" && r.relationType === "earlier") {
-      if (r.stratumA === b && r.stratumB === a) {
-        return {
-          hasConflict: true,
-          message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`,
-        };
-      }
-    }
-  }
-  return { hasConflict: false, message: "" };
 };
 
 const generatePendingArchives = (
@@ -842,8 +688,7 @@ const generateAnomalies = (
     }
 
     REQUIRED_FIELDS.forEach((field) => {
-      const value = vr[field];
-      if (typeof value === "string" && (!value || value.trim() === "")) {
+      if (isFieldEmpty(vr, field)) {
         anomalies.push({
           id: `field-${vr.id}-${String(field)}`,
           type: "missing_field",
@@ -895,7 +740,7 @@ const generateAnomalies = (
   });
 
   relations.forEach((rel) => {
-    const conflict = checkConflictRelationStatic(
+    const conflict = checkStratumRelationConflict(
       rel.stratumA,
       rel.stratumB,
       rel.relationType,
@@ -1034,10 +879,7 @@ const generateTrenchSummaries = (
     ).length;
 
     const fieldAnomalies = trenchRecords.filter((r) => {
-      return REQUIRED_FIELDS.some((f) => {
-        const v = r[f];
-        return typeof v === "string" && (!v || v.trim() === "");
-      });
+      return REQUIRED_FIELDS.some((f) => isFieldEmpty(r, f));
     }).length;
 
     const relationIssues = generatePendingRelations(trenchRecords, relations).length;
@@ -1086,10 +928,7 @@ const generateUnorganizedStats = (
   ).length;
 
   const missingRequiredFields = records.filter((r) =>
-    REQUIRED_FIELDS.some((f) => {
-      const v = r[f];
-      return typeof v === "string" && (!v || v.trim() === "");
-    })
+    REQUIRED_FIELDS.some((f) => isFieldEmpty(r, f))
   ).length;
 
   const withoutRelicUnit = records.filter(
@@ -2316,20 +2155,6 @@ function App() {
     return null;
   };
 
-  const parseCoordinate = (coord: string): { eCoordinate: string; nCoordinate: string } => {
-    const clean = coord.trim().toUpperCase();
-    const eMatch = clean.match(/E\s*([\d.]+)/);
-    const nMatch = clean.match(/N\s*([\d.]+)/);
-    if (eMatch && nMatch) {
-      return { eCoordinate: eMatch[1], nCoordinate: nMatch[1] };
-    }
-    const parts = clean.split(/[\s,，、]+/).filter(Boolean);
-    if (parts.length >= 2) {
-      return { eCoordinate: parts[0], nCoordinate: parts[1] };
-    }
-    return { eCoordinate: "", nCoordinate: "" };
-  };
-
   const validateBatchRow = (row: BatchImportRow): string[] => {
     const errors: string[] = [];
     if (!row.trenchNumber.trim()) errors.push("探方不能为空");
@@ -2337,7 +2162,7 @@ function App() {
     if (!row.coordinatePoint.trim()) {
       errors.push("坐标点不能为空");
     } else {
-      const { eCoordinate, nCoordinate } = parseCoordinate(row.coordinatePoint);
+      const { eCoordinate, nCoordinate } = parseCoordinatePoint(row.coordinatePoint);
       if (!eCoordinate || !nCoordinate) errors.push("坐标点格式无效，需包含E和N坐标（如 E3.25 N4.50）");
     }
     if (!row.depth.trim()) errors.push("深度不能为空");
@@ -2369,7 +2194,7 @@ function App() {
   };
 
   const normalizeCoordinate = (coord: string): { eNorm: string; nNorm: string } => {
-    const { eCoordinate, nCoordinate } = parseCoordinate(coord);
+    const { eCoordinate, nCoordinate } = parseCoordinatePoint(coord);
     const eNorm = eCoordinate ? parseFloat(eCoordinate).toFixed(4) : normalizeValue(coord);
     const nNorm = nCoordinate ? parseFloat(nCoordinate).toFixed(4) : normalizeValue(coord);
     return { eNorm, nNorm };
@@ -2559,7 +2384,7 @@ function App() {
 
     const now = new Date().toLocaleString("zh-CN");
     const newRecords: ArtifactRecord[] = rowsToImport.map((row, idx) => {
-      const coords = parseCoordinate(row.coordinatePoint);
+      const coords = parseCoordinatePoint(row.coordinatePoint);
       return {
         id: Date.now() + idx,
         trenchNumber: row.trenchNumber.trim(),

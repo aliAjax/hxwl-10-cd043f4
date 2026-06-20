@@ -1,55 +1,26 @@
 import type {
   ArtifactRecord,
   StratumRelation,
-  RelationType,
 } from "../types";
 import type {
   ConsistencyIssue,
   ConsistencyReport,
   DataCollectionInput,
   IssueCategory,
-  IssueSeverity,
 } from "./types";
 import { runChronologyInference } from "../chronologyInference";
-
-const COORD_PREFIXES = new Set(["e", "n", "w", "s", "东", "北", "西", "南"]);
-const COORD_SUFFIXES = new Set(["m", "cm", "mm", "米", "厘米", "毫米"]);
+import {
+  isValidCoordinateFormat as _isValidCoordinateFormat,
+  isFieldEmpty,
+  checkAllStratumRelationConflicts,
+  REQUIRED_FIELDS,
+} from "../domainValidators";
 
 export const isValidCoordinateFormat = (
   value: string
 ): { valid: boolean; reason?: string } => {
-  if (!value || value.trim() === "") {
-    return { valid: false, reason: "坐标为空" };
-  }
-  const clean = value.trim();
-  const numMatch = clean.match(/-?\d+(\.\d+)?/);
-  if (!numMatch) {
-    return { valid: false, reason: "未找到有效数字" };
-  }
-  const numStr = numMatch[0];
-  const num = parseFloat(numStr);
-  if (isNaN(num)) return { valid: false, reason: "数字解析失败" };
-  const numStart = numMatch.index || 0;
-  const numEnd = numStart + numStr.length;
-  const prefix = clean.slice(0, numStart).trim().toLowerCase();
-  const suffix = clean.slice(numEnd).trim().toLowerCase();
-
-  if (prefix && !COORD_PREFIXES.has(prefix)) {
-    return { valid: false, reason: `前缀"${prefix}"不是有效的坐标标识` };
-  }
-  if (suffix && !COORD_SUFFIXES.has(suffix)) {
-    return { valid: false, reason: `后缀"${suffix}"不是有效的单位标识` };
-  }
-  if (num < 0) {
-    return { valid: false, reason: "坐标不能为负数" };
-  }
-  return { valid: true };
-};
-
-const relationLabelMap: Record<RelationType, string> = {
-  earlier: "早于",
-  breaks: "打破",
-  contains: "包含",
+  const result = _isValidCoordinateFormat(value);
+  return { valid: result.valid, reason: result.reason };
 };
 
 const createIssue = (
@@ -68,7 +39,7 @@ const checkTrenchNumbers = (
   issues: ConsistencyIssue[]
 ): void => {
   records.forEach((record) => {
-    if (!record.trenchNumber || record.trenchNumber.trim() === "") {
+    if (isFieldEmpty(record, "trenchNumber")) {
       issues.push(
         createIssue({
           severity: "blocking",
@@ -132,113 +103,41 @@ const checkStratumRelations = (
   relations: StratumRelation[],
   issues: ConsistencyIssue[]
 ): void => {
-  for (let i = 0; i < relations.length; i++) {
-    const r1 = relations[i];
+  const conflicts = checkAllStratumRelationConflicts(relations);
 
-    if (r1.stratumA === r1.stratumB) {
+  conflicts.forEach((conflict) => {
+    if (conflict.conflictKind === "stratum_self_reference") {
       issues.push(
         createIssue({
           severity: "blocking",
           category: "stratum_relation_conflict",
-          message: `关系 #${r1.id} 地层A与地层B相同（"${r1.stratumA}"）`,
-          stratumName: r1.stratumA,
-          details: { relationId: r1.id, relationType: r1.relationType },
+          message: conflict.message,
+          stratumName: conflict.relation1.stratumA,
+          details: { relationId: conflict.relation1.id, relationType: conflict.relation1.relationType },
+        })
+      );
+    } else if (conflict.conflictKind === "stratum_duplicate_relation") {
+      issues.push(
+        createIssue({
+          severity: "blocking",
+          category: "duplicate_relation",
+          message: conflict.message,
+          stratumName: conflict.relation1.stratumA,
+          details: { relation1: conflict.relation1, relation2: conflict.relation2 },
+        })
+      );
+    } else {
+      issues.push(
+        createIssue({
+          severity: "blocking",
+          category: "stratum_relation_conflict",
+          message: conflict.message,
+          stratumName: conflict.relation1.stratumA,
+          details: { relation1: conflict.relation1, relation2: conflict.relation2 },
         })
       );
     }
-
-    for (let j = i + 1; j < relations.length; j++) {
-      const r2 = relations[j];
-
-      const r1Label = `"${r1.stratumA}" ${relationLabelMap[r1.relationType]} "${r1.stratumB}"`;
-      const r2Label = `"${r2.stratumA}" ${relationLabelMap[r2.relationType]} "${r2.stratumB}"`;
-
-      if (
-        r1.stratumA === r2.stratumA &&
-        r1.stratumB === r2.stratumB &&
-        r1.relationType === r2.relationType
-      ) {
-        issues.push(
-          createIssue({
-            severity: "blocking",
-            category: "duplicate_relation",
-            message: `存在重复关系：${r1Label}（关系 #${r1.id} 与 #${r2.id}）`,
-            stratumName: r1.stratumA,
-            details: { relation1: r1, relation2: r2 },
-          })
-        );
-      }
-
-      if (r1.relationType === r2.relationType) {
-        if (r1.stratumA === r2.stratumB && r1.stratumB === r2.stratumA) {
-          issues.push(
-            createIssue({
-              severity: "blocking",
-              category: "stratum_relation_conflict",
-              message: `地层关系矛盾：${r1Label} 与 ${r2Label} 互斥`,
-              stratumName: r1.stratumA,
-              details: { relation1: r1, relation2: r2 },
-            })
-          );
-        }
-      }
-
-      if (r1.relationType === "breaks" && r2.relationType === "earlier") {
-        if (r1.stratumA === r2.stratumA && r1.stratumB === r2.stratumB) {
-          issues.push(
-            createIssue({
-              severity: "blocking",
-              category: "stratum_relation_conflict",
-              message: `地层关系矛盾：${r1Label} 与 ${r2Label} 逻辑冲突（打破意味着年代更晚，不能同时早于）`,
-              stratumName: r1.stratumA,
-              details: { relation1: r1, relation2: r2 },
-            })
-          );
-        }
-      }
-      if (r1.relationType === "earlier" && r2.relationType === "breaks") {
-        if (r1.stratumA === r2.stratumA && r1.stratumB === r2.stratumB) {
-          issues.push(
-            createIssue({
-              severity: "blocking",
-              category: "stratum_relation_conflict",
-              message: `地层关系矛盾：${r1Label} 与 ${r2Label} 逻辑冲突（打破意味着年代更晚，不能同时早于）`,
-              stratumName: r1.stratumA,
-              details: { relation1: r1, relation2: r2 },
-            })
-          );
-        }
-      }
-
-      if (r1.relationType === "breaks" && r2.relationType === "breaks") {
-        if (r1.stratumA === r2.stratumB && r1.stratumB === r2.stratumA) {
-          issues.push(
-            createIssue({
-              severity: "blocking",
-              category: "stratum_relation_conflict",
-              message: `地层关系矛盾：${r1Label} 与 ${r2Label} 互相打破，不可能`,
-              stratumName: r1.stratumA,
-              details: { relation1: r1, relation2: r2 },
-            })
-          );
-        }
-      }
-
-      if (r1.relationType === "contains" && r2.relationType === "contains") {
-        if (r1.stratumA === r2.stratumB && r1.stratumB === r2.stratumA) {
-          issues.push(
-            createIssue({
-              severity: "blocking",
-              category: "stratum_relation_conflict",
-              message: `地层关系矛盾：${r1Label} 与 ${r2Label} 互相包含，不可能`,
-              stratumName: r1.stratumA,
-              details: { relation1: r1, relation2: r2 },
-            })
-          );
-        }
-      }
-    }
-  }
+  });
 };
 
 const checkOrphanStrata = (
