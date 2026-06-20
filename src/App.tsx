@@ -56,6 +56,7 @@ import {
   REQUIRED_FIELDS,
   isFieldEmpty,
   checkStratumRelationConflict,
+  checkAllStratumRelationConflicts,
   type ValidatedArtifactRecord,
 } from "./domainValidators";
 
@@ -527,7 +528,7 @@ const generateMissingFields = (
   const missingFields: MissingFieldItem[] = [];
 
   records.forEach((record) => {
-    if (record.status === "archived") return;
+    if (record.status === "archived" || record.status === "approved") return;
 
     REQUIRED_FIELDS.forEach((field) => {
       if (isFieldEmpty(record, field)) {
@@ -607,32 +608,26 @@ const generatePendingRelations = (
     }
   }
 
-  relations.forEach((rel) => {
-    const conflict = checkStratumRelationConflict(
-      rel.stratumA,
-      rel.stratumB,
-      rel.relationType,
-      relations
-    );
-    if (conflict.hasConflict) {
-      const relatedArtifacts = records.filter(
-        (r) => r.stratum === rel.stratumA || r.stratum === rel.stratumB
-      );
+  const pendingRelationsConflicts = checkAllStratumRelationConflicts(relations);
 
-      pending.push({
-        relationId: rel.id,
-        trenchNumber:
-          relatedArtifacts[0]?.trenchNumber ||
-          records.find((r) => r.stratum === rel.stratumA)?.trenchNumber ||
-          "",
-        stratumA: rel.stratumA,
-        stratumB: rel.stratumB,
-        issue: conflict.message,
-        suggestion: "请重新核对地层关系",
-        hasConflictingRelation: true,
-        relatedArtifactCount: relatedArtifacts.length,
-      });
-    }
+  pendingRelationsConflicts.forEach((conflict) => {
+    const relatedArtifacts = records.filter(
+      (r) => r.stratum === conflict.relation1.stratumA || r.stratum === conflict.relation1.stratumB
+    );
+
+    pending.push({
+      relationId: conflict.relation1.id,
+      trenchNumber:
+        relatedArtifacts[0]?.trenchNumber ||
+        records.find((r) => r.stratum === conflict.relation1.stratumA)?.trenchNumber ||
+        "",
+      stratumA: conflict.relation1.stratumA,
+      stratumB: conflict.relation1.stratumB,
+      issue: conflict.message,
+      suggestion: "请重新核对地层关系",
+      hasConflictingRelation: true,
+      relatedArtifactCount: relatedArtifacts.length,
+    });
   });
 
   return pending;
@@ -668,7 +663,7 @@ const generateAnomalies = (
   const now = new Date().toLocaleString("zh-CN");
 
   validatedRecords.forEach((vr) => {
-    if (vr.status === "archived") return;
+    if (vr.status === "archived" || vr.status === "approved") return;
 
     if (!vr.isCoordinateValid) {
       anomalies.push({
@@ -739,29 +734,23 @@ const generateAnomalies = (
     }
   });
 
-  relations.forEach((rel) => {
-    const conflict = checkStratumRelationConflict(
-      rel.stratumA,
-      rel.stratumB,
-      rel.relationType,
-      relations
-    );
-    if (conflict.hasConflict) {
-      anomalies.push({
-        id: `rel-conflict-${rel.id}`,
-        type: "stratum_conflict",
-        trenchNumber:
-          records.find((r) => r.stratum === rel.stratumA)?.trenchNumber ||
-          records.find((r) => r.stratum === rel.stratumB)?.trenchNumber ||
-          "",
-        stratum: rel.stratumA,
-        recordId: rel.id,
-        severity: "critical",
-        message: conflict.message,
-        affectedRole: ["leader"],
-        createdAt: rel.createdAt,
-      });
-    }
+  const anomaliesRelationConflicts = checkAllStratumRelationConflicts(relations);
+
+  anomaliesRelationConflicts.forEach((conflict) => {
+    anomalies.push({
+      id: `rel-conflict-${conflict.relation1.id}`,
+      type: "stratum_conflict",
+      trenchNumber:
+        records.find((r) => r.stratum === conflict.relation1.stratumA)?.trenchNumber ||
+        records.find((r) => r.stratum === conflict.relation1.stratumB)?.trenchNumber ||
+        "",
+      stratum: conflict.relation1.stratumA,
+      recordId: conflict.relation1.id,
+      severity: "critical",
+      message: conflict.message,
+      affectedRole: ["leader"],
+      createdAt: conflict.relation1.createdAt,
+    });
   });
 
   return anomalies;
@@ -875,11 +864,18 @@ const generateTrenchSummaries = (
       totalArtifacts > 0 ? Math.round((archived / totalArtifacts) * 100) : 0;
 
     const coordinateAnomalies = validatedTrenchRecords.filter(
-      (r) => !r.isCoordinateValid
+      (r) =>
+        !r.isCoordinateValid &&
+        r.status !== "archived" &&
+        r.status !== "approved"
     ).length;
 
     const fieldAnomalies = trenchRecords.filter((r) => {
-      return REQUIRED_FIELDS.some((f) => isFieldEmpty(r, f));
+      return (
+        r.status !== "archived" &&
+        r.status !== "approved" &&
+        REQUIRED_FIELDS.some((f) => isFieldEmpty(r, f))
+      );
     }).length;
 
     const relationIssues = generatePendingRelations(trenchRecords, relations).length;
@@ -914,8 +910,14 @@ const generateUnorganizedStats = (
   validatedRecords: ValidatedArtifactRecord[]
 ): UnorganizedStats => {
   const totalRecords = records.length;
+  const activeRecords = records.filter(
+    (r) => r.status !== "archived" && r.status !== "approved"
+  );
+  const activeValidatedRecords = validatedRecords.filter(
+    (r) => r.status !== "archived" && r.status !== "approved"
+  );
 
-  const missingCoordinates = validatedRecords.filter(
+  const missingCoordinates = activeValidatedRecords.filter(
     (r) =>
       !r.isCoordinateValid &&
       (r.coordinateError?.includes("为空") ||
@@ -923,19 +925,19 @@ const generateUnorganizedStats = (
         !r.nCoordinate.trim())
   ).length;
 
-  const invalidCoordinates = validatedRecords.filter(
+  const invalidCoordinates = activeValidatedRecords.filter(
     (r) => !r.isCoordinateValid && r.eCoordinate.trim() && r.nCoordinate.trim()
   ).length;
 
-  const missingRequiredFields = records.filter((r) =>
+  const missingRequiredFields = activeRecords.filter((r) =>
     REQUIRED_FIELDS.some((f) => isFieldEmpty(r, f))
   ).length;
 
-  const withoutRelicUnit = records.filter(
+  const withoutRelicUnit = activeRecords.filter(
     (r) => !r.relicUnit || r.relicUnit.trim() === ""
   ).length;
 
-  const withoutQuantity = records.filter(
+  const withoutQuantity = activeRecords.filter(
     (r) => !r.quantity || r.quantity.trim() === ""
   ).length;
 
@@ -1959,65 +1961,19 @@ function App() {
   const strataOptions = availableStrata();
 
   const checkDuplicateRelation = (a: string, b: string, type: RelationType, excludeId?: number): boolean => {
-    return stratumRelations.some(r => {
-      if (excludeId && r.id === excludeId) return false;
-      const sameDirection = r.stratumA === a && r.stratumB === b && r.relationType === type;
-      return sameDirection;
-    });
+    const filteredRelations = excludeId !== undefined
+      ? stratumRelations.filter(r => r.id !== excludeId)
+      : stratumRelations;
+    const conflict = checkStratumRelationConflict(a, b, type, filteredRelations);
+    return conflict.hasConflict && conflict.conflictKind === "stratum_duplicate_relation";
   };
 
-  const checkConflictRelation = (a: string, b: string, type: RelationType): { hasConflict: boolean; message: string } => {
-    for (const r of stratumRelations) {
-      if (r.relationType === type) {
-        if (r.stratumA === b && r.stratumB === a) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${b} ${getRelationLabel(type)} ${a}"，不能同时存在 "${a} ${getRelationLabel(type)} ${b}"`
-          };
-        }
-      }
-      if (type === "contains" && r.relationType === "contains") {
-        if (r.stratumA === b && r.stratumB === a) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${b} 包含 ${a}"，不能同时存在 "${a} 包含 ${b}"`
-          };
-        }
-      }
-      if (type === "breaks" && r.relationType === "earlier") {
-        if (r.stratumA === a && r.stratumB === b) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${a} 早于 ${b}"，不能同时存在 "${a} 打破 ${b}"（打破意味着年代更晚）`
-          };
-        }
-      }
-      if (type === "earlier" && r.relationType === "breaks") {
-        if (r.stratumA === a && r.stratumB === b) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${a} 打破 ${b}"，不能同时存在 "${a} 早于 ${b}"（打破意味着年代更晚）`
-          };
-        }
-      }
-      if (type === "breaks" && r.relationType === "breaks") {
-        if (r.stratumA === b && r.stratumB === a) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${b} 打破 ${a}"，不能同时存在 "${a} 打破 ${b}"`
-          };
-        }
-      }
-      if (type === "earlier" && r.relationType === "earlier") {
-        if (r.stratumA === b && r.stratumB === a) {
-          return {
-            hasConflict: true,
-            message: `矛盾：已存在 "${b} 早于 ${a}"，不能同时存在 "${a} 早于 ${b}"`
-          };
-        }
-      }
-    }
-    return { hasConflict: false, message: "" };
+  const checkConflictRelation = (a: string, b: string, type: RelationType, excludeId?: number): { hasConflict: boolean; message: string } => {
+    const filteredRelations = excludeId !== undefined
+      ? stratumRelations.filter(r => r.id !== excludeId)
+      : stratumRelations;
+    const result = checkStratumRelationConflict(a, b, type, filteredRelations);
+    return { hasConflict: result.hasConflict, message: result.message };
   };
 
   const validateRelationForm = (): boolean => {
